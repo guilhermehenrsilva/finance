@@ -1,0 +1,59 @@
+### 1. Criar novo usuário (Register)
+POST http://localhost:8080/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Usuário Teste",
+  "email": "teste@email.com",
+  "password": "minhasenhaforte",
+  "mainCurrency": "BRL"
+}
+
+###
+
+### 2. Fazer Login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "teste@email.com",
+  "password": "minhasenhaforte"
+}
+
+### 1. Listar Contas (Vai retornar vazio inicialmente)
+GET http://localhost:8080/api/accounts
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTMwMDU1Mn0.npUReEDucjxSowyzysncoHBq-P4uCw1n79vP1ABZQ8Q"
+
+###
+
+### 2. Criar Nova Conta (Ex: Conta Corrente Nubank)
+POST http://localhost:8080/api/accounts
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTMwMDU1Mn0.npUReEDucjxSowyzysncoHBq-P4uCw1n79vP1ABZQ8Q"
+
+{
+  "name": "Nubank",
+  "type": "CORRENTE",
+  "initialBalance": 1500.00,
+  "color": "#820ad1"
+}
+
+### 1. Criar Despesa (Precisa do ID da Conta que você criou na etapa 5)
+POST http://localhost:8080/api/transactions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTMwMDU1Mn0.npUReEDucjxSowyzysncoHBq-P4uCw1n79vP1ABZQ8Q"
+
+{
+  "accountId":"dd7e5fb1-d0aa-458c-ae45-e5f7e6025b6e",
+  "description": "Compra no Supermercado",
+  "amount": 250.50,
+  "type": "EXPENSE",
+  "status": "PAID",
+  "date": "2026-10-06"
+}
+
+###
+
+### 2. Listar Transações
+GET http://localhost:8080/api/transactions
+Authorization: Bearer  eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTMwMDU1Mn0.npUReEDucjxSowyzysncoHBq-P4uCw1n79vP1ABZQ8Q"
