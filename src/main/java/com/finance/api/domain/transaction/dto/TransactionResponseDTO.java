@@ -8,24 +8,28 @@ import java.time.LocalDate;
 
 public record TransactionResponseDTO(
         String id,
-        String accountId,
         String accountName,
+        String creditCardName,
+        String invoiceId,
         String description,
         BigDecimal amount,
         TransactionType type,
         TransactionStatus status,
-        LocalDate date
+        LocalDate date,
+        String categoryName
 ) {
     public TransactionResponseDTO(Transaction t) {
         this(
                 t.getId(),
-                t.getAccount().getId(),
-                t.getAccount().getName(),
+                t.getAccount() != null ? t.getAccount().getName() : null,
+                t.getCreditCard() != null ? t.getCreditCard().getName() : null,
+                t.getInvoice() != null ? t.getInvoice().getId() : null,
                 t.getDescription(),
                 t.getAmount(),
                 t.getType(),
                 t.getStatus(),
-                t.getDate()
+                t.getDate(),
+                t.getCategory() != null ? t.getCategory().getName() : null
         );
     }
 }

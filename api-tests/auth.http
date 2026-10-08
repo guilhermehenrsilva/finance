@@ -57,3 +57,98 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6I
 ### 2. Listar Transações
 GET http://localhost:8080/api/transactions
 Authorization: Bearer  eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTMwMDU1Mn0.npUReEDucjxSowyzysncoHBq-P4uCw1n79vP1ABZQ8Q"
+
+
+### 1. Criar Categoria Principal "Alimentação"
+POST http://localhost:8080/api/categories
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTQ4OTM5Nn0.DAQe2ZiQzYk2HgM4N9XQxx-VR7aUM9QUHkb5pPNq_v0
+
+{
+  "name": "Assinaturas",
+  "type": "EXPENSE",
+  "icon": "entertainment",
+  "color": "#03ed55"
+}
+
+### 
+
+### 2. Criar Subcategoria "iFood" (Substitua o parentId pelo ID retornado no passo 1)
+POST http://localhost:8080/api/categories
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTMwMzkxNH0.JEIDgcOr1S4PvhNfOrR2srtl3tAmO1TJyQ1LoqLXxzc
+
+{
+  "name": "iFood",
+  "type": "EXPENSE",
+  "icon": "fastfood",
+  "color": "#ff0000",
+  "parentId": "eea01108-6129-4c67-a366-9910b8c934c9"
+}
+
+### 1. Criar Cartão de Crédito
+POST http://localhost:8080/api/credit-cards
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTMwNTgzMn0.p7mBWVA9og1lqOohIg-CFLtBTnvxdmkMAmIQKEqj460
+
+{
+  "name": "Cartão Nubank Ultravioleta",
+  "creditLimit": 5000.00,
+  "closingDay": 25,
+  "dueDay": 5,
+  "color": "#820ad1"
+}
+
+###
+
+### 2. Listar Cartões
+GET http://localhost:8080/api/credit-cards
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTQ4OTM5Nn0.DAQe2ZiQzYk2HgM4N9XQxx-VR7aUM9QUHkb5pPNq_v0
+
+### Criar Compra no Cartão de Crédito
+POST http://localhost:8080/api/transactions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTQ2NDI5OH0.3TnxWh8STCzP51NDZjbs4UhfQicERHyRGFnrPafE0Qg
+
+
+{
+  "creditCardId": "093c93aa-ba91-4565-9da3-26d98fcf8990",
+  "categoryId": "eea01108-6129-4c67-a366-9910b8c934c9",
+  "description": "Compra parcelada Notebook",
+  "amount": 2500.00,
+  "type": "EXPENSE",
+  "status": "PAID",
+  "date": "2026-10-08"
+}
+
+### Criar Compra Parcelada no Cartão de Crédito
+POST http://localhost:8080/api/transactions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTQ4ODAxM30.Du95pO6NmGpEIh4LwCtQUnfQ3kDEjwdffn0u2-n_9Tk
+
+{
+  "creditCardId": "093c93aa-ba91-4565-9da3-26d98fcf8990",
+  "categoryId": "eea01108-6129-4c67-a366-9910b8c934c9",
+  "description": "Compra parcelada Notebook",
+  "amount": 2500.00,
+  "type": "EXPENSE",
+  "status": "PAID",
+  "date": "2026-10-08",
+  "totalInstallments": 12
+}
+
+
+### Criar Despesa Recorrente (Ex: Assinatura Netflix)
+POST http://localhost:8080/api/recurrings
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGaW5hbmNlIEFQSSIsInN1YiI6InRlc3RlQGVtYWlsLmNvbSIsImV4cCI6MTc5MTQ4OTg1Nn0.SNLszjxbnfk7a7xrLRRN9y3QgWTWylXrxaMI3hL-Bgk
+
+{
+  "description": "Assinatura Netflix",
+  "amount": 59.90,
+  "type": "EXPENSE",
+  "frequency": "MONTHLY",
+  "startDate": "2026-10-10",
+  "creditCardId": "093c93aa-ba91-4565-9da3-26d98fcf8990",
+  "categoryId": "eea01108-6129-4c67-a366-9910b8c934c9",
+}

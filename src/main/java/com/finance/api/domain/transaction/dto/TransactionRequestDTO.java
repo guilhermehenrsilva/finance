@@ -9,10 +9,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record TransactionRequestDTO(
-        @NotBlank String accountId,
-        @NotBlank String description,
-        @NotNull @Positive BigDecimal amount,
-        @NotNull TransactionType type,
-        @NotNull TransactionStatus status,
-        @NotNull LocalDate date
+        String description,
+        BigDecimal amount,
+        TransactionType type,
+        TransactionStatus status,
+        LocalDate date,
+        String categoryId,
+        String accountId,
+        String creditCardId,
+        Integer totalInstallments 
 ) {}
