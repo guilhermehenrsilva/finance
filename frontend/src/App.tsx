@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { getDashboard, login } from './services/api'
+import { getDashboard, login, register } from './services/api'
 import type { DashboardSummary, Transaction } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
@@ -95,8 +95,11 @@ function App() {
 }
 
 function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -105,9 +108,23 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
     setLoading(true)
     setError('')
     try {
+      if (mode === 'register') {
+        if (password !== confirmation) {
+          setError('As senhas não conferem.')
+          return
+        }
+        await register(name, email, password, 'BRL')
+        setMode('login')
+        setPassword('')
+        setConfirmation('')
+        setError('Cadastro realizado. Agora entre com seus dados.')
+        return
+      }
       onLogin(await login(email, password))
     } catch {
-      setError('E-mail ou senha inválidos.')
+      setError(mode === 'register'
+        ? 'Não foi possível realizar o cadastro. Verifique se o e-mail já está em uso.'
+        : 'E-mail ou senha inválidos.')
     } finally {
       setLoading(false)
     }
@@ -117,15 +134,20 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
     <main className="login-page">
       <section className="login-panel">
         <div className="brand"><span className="brand-mark">$</span><span>Finance</span></div>
-        <p className="eyebrow">Bem-vindo de volta</p>
-        <h1>Cuide melhor das suas finanças.</h1>
+        <p className="eyebrow">{mode === 'login' ? 'Bem-vindo de volta' : 'Comece agora'}</p>
+        <h1>{mode === 'login' ? 'Cuide melhor das suas finanças.' : 'Organize sua vida financeira.'}</h1>
         <p className="muted">Acompanhe seu dinheiro de forma simples, clara e segura.</p>
         <form onSubmit={submit} className="login-form">
+          {mode === 'register' && <label>Nome<input required type="text" value={name} onChange={(event) => setName(event.target.value)} /></label>}
           <label>E-mail<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
           <label>Senha<input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+          {mode === 'register' && <label>Confirmar senha<input required type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>}
           {error && <div className="alert error">{error}</div>}
-          <button className="primary-button" disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</button>
+          <button className="primary-button" disabled={loading}>{loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}</button>
         </form>
+        <button className="auth-switch" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}>
+          {mode === 'login' ? 'Ainda não tenho uma conta' : 'Já tenho uma conta'}
+        </button>
       </section>
       <section className="login-illustration">
         <div className="illustration-card"><span>Saldo total</span><strong>R$ 12.840,50</strong><div className="illustration-chart" /></div>

@@ -15,7 +15,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error('Não foi possível concluir a solicitação.')
   }
 
-  return response.json() as Promise<T>
+  const body = await response.text()
+  return (body ? JSON.parse(body) : undefined) as T
 }
 
 export async function login(email: string, password: string): Promise<string> {
@@ -24,6 +25,18 @@ export async function login(email: string, password: string): Promise<string> {
     body: JSON.stringify({ email, password }),
   })
   return data.token
+}
+
+export async function register(
+  name: string,
+  email: string,
+  password: string,
+  mainCurrency: string,
+): Promise<void> {
+  await request<void>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ name, email, password, mainCurrency }),
+  })
 }
 
 export async function getDashboard(
