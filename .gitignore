@@ -1,6 +1,8 @@
 HELP.md
 target/
 node_modules/
+.env
+frontend/.env
 frontend/dist/
 frontend/*.tsbuildinfo
 frontend/vite.config.js

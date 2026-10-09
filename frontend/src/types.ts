@@ -1,6 +1,26 @@
 export type TransactionType = 'INCOME' | 'EXPENSE'
 export type TransactionStatus = 'PENDING' | 'PAID'
 
+export interface Account {
+  id: string
+  name: string
+  type: string
+  initialBalance: number
+  currentBalance: number
+  color: string | null
+  active: boolean
+}
+
+export interface Category {
+  id: string
+  name: string
+  type: TransactionType
+  icon: string | null
+  color: string | null
+  parentId: string | null
+  parentName: string | null
+}
+
 export interface CategorySummary {
   categoryName: string
   amount: number
