@@ -2,9 +2,12 @@
   "name": "finance",
   "private": true,
   "scripts": {
-    "dev": "concurrently --kill-others-on-fail --names API,WEB --prefix-colors blue,green \"mvnw.cmd spring-boot:run\" \"npm --prefix frontend run dev\""
+    "dev": "node scripts/dev.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "mysql": "^2.18.1"
   }
 }

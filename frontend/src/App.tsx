@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { createAccount, createCategory, createCreditCard, createTransaction, deleteTransaction, getAccounts, getCategories, getCreditCards, getDashboard, getTransactions, login, register, updateTransaction } from './services/api'
-import type { Account, Category, CreditCard, DashboardSummary, Transaction, TransactionType } from './types'
+import { createAccount, createCategory, createCreditCard, createTransaction, deleteTransaction, getAccounts, getCategories, getCreditCards, getDashboard, getInvoices, getTransactions, login, register, updateTransaction } from './services/api'
+import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionType } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
 
@@ -39,6 +39,7 @@ function App() {
   const [refresh, setRefresh] = useState(0)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [creditCards, setCreditCards] = useState<CreditCard[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
 
   useEffect(() => {
     if (!token) return
@@ -63,6 +64,9 @@ function App() {
     getCreditCards(token)
       .then(setCreditCards)
       .catch(() => setError('Não foi possível carregar seus cartões.'))
+    getInvoices(token)
+      .then(setInvoices)
+      .catch(() => setError('Não foi possível carregar suas faturas.'))
   }, [token, startDate, endDate, refresh])
 
   function handleLogin(newToken: string) {
@@ -105,7 +109,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -173,11 +177,12 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ summary, accounts, categories, creditCards, transactions, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged }: {
+function Dashboard({ summary, accounts, categories, creditCards, invoices, transactions, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged }: {
   summary: DashboardSummary
   accounts: Account[]
   categories: Category[]
   creditCards: CreditCard[]
+  invoices: Invoice[]
   transactions: Transaction[]
   token: string
   onAccountCreated: (account: Account) => void
@@ -213,6 +218,7 @@ function Dashboard({ summary, accounts, categories, creditCards, transactions, t
       <AccountsSection accounts={accounts} token={token} onAccountCreated={onAccountCreated} />
       <CategoriesSection categories={categories} token={token} onCategoryCreated={onCategoryCreated} />
       <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />
+      <InvoicesSection invoices={invoices} />
       <TransactionsSection accounts={accounts} categories={categories} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={onTransactionsChanged} />
     </div>
   )
@@ -420,6 +426,32 @@ function CreditCardsSection({ cards, accounts, token, onCreated }: {
             <small>{card.accountName ? `Pagamento pela conta ${card.accountName}` : 'Sem conta de pagamento definida'}</small>
           </article>
         })}
+      </div>}
+    </section>
+  )
+}
+
+function InvoicesSection({ invoices }: { invoices: Invoice[] }) {
+  const [cardFilter, setCardFilter] = useState('ALL')
+  const visibleInvoices = invoices.filter((invoice) => cardFilter === 'ALL' || invoice.creditCardId === cardFilter)
+  const monthName = (month: number) => new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(2024, month - 1, 1))
+  const statusLabel: Record<Invoice['status'], string> = { OPEN: 'Aberta', CLOSED: 'Fechada', PAID: 'Paga' }
+
+  return (
+    <section className="card invoices-card" id="invoices">
+      <div className="card-heading">
+        <div><p className="eyebrow">Cartões</p><h2>Faturas</h2></div>
+        {invoices.length > 0 && <select className="invoice-filter" value={cardFilter} onChange={(event) => setCardFilter(event.target.value)}>
+          <option value="ALL">Todos os cartões</option>
+          {Array.from(new Map(invoices.map((invoice) => [invoice.creditCardId, invoice.creditCardName]))).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </select>}
+      </div>
+      {visibleInvoices.length === 0 ? <EmptyState text="Nenhuma fatura gerada ainda." /> : <div className="invoice-list">
+        {visibleInvoices.map((invoice) => <article className="invoice-row" key={invoice.id}>
+          <div className="invoice-main"><strong>{invoice.creditCardName}</strong><span>{monthName(invoice.month)} de {invoice.year} · vence em {formatDate(invoice.dueDate)}</span></div>
+          <div className="invoice-amount"><strong>{formatCurrency(invoice.remainingAmount)}</strong><span>de {formatCurrency(invoice.totalAmount)}</span></div>
+          <span className={`invoice-status ${invoice.status.toLowerCase()}`}>{statusLabel[invoice.status]}</span>
+        </article>)}
       </div>}
     </section>
   )

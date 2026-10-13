@@ -22,6 +22,21 @@ export interface CreditCard {
   color: string | null
 }
 
+export type InvoiceStatus = 'OPEN' | 'CLOSED' | 'PAID'
+
+export interface Invoice {
+  id: string
+  creditCardId: string
+  creditCardName: string
+  month: number
+  year: number
+  totalAmount: number
+  paidAmount: number
+  remainingAmount: number
+  status: InvoiceStatus
+  dueDate: string
+}
+
 export interface Category {
   id: string
   name: string

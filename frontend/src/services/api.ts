@@ -1,4 +1,4 @@
-import type { Account, Category, CreditCard, DashboardSummary, Transaction, TransactionStatus, TransactionType } from '../types'
+import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionStatus, TransactionType } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 
@@ -48,6 +48,10 @@ export async function createCreditCard(token: string, card: {
   color: string
 }): Promise<CreditCard> {
   return request<CreditCard>('/credit-cards', { method: 'POST', headers: auth(token), body: JSON.stringify(card) })
+}
+
+export async function getInvoices(token: string): Promise<Invoice[]> {
+  return request<Invoice[]>('/invoices', { headers: auth(token) })
 }
 
 export async function getCategories(token: string): Promise<Category[]> {
