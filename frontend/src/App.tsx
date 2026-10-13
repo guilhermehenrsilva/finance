@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { createAccount, createCategory, createTransaction, getAccounts, getCategories, getDashboard, login, register } from './services/api'
-import type { Account, Category, DashboardSummary, Transaction, TransactionType } from './types'
+import { createAccount, createCategory, createCreditCard, createTransaction, deleteTransaction, getAccounts, getCategories, getCreditCards, getDashboard, getTransactions, login, register, updateTransaction } from './services/api'
+import type { Account, Category, CreditCard, DashboardSummary, Transaction, TransactionType } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
 
@@ -37,6 +37,8 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([])
 
   useEffect(() => {
     if (!token) return
@@ -55,6 +57,12 @@ function App() {
     getCategories(token)
       .then(setCategories)
       .catch(() => setError('Não foi possível carregar suas categorias.'))
+    getTransactions(token)
+      .then(setTransactions)
+      .catch(() => setError('Não foi possível carregar suas movimentações.'))
+    getCreditCards(token)
+      .then(setCreditCards)
+      .catch(() => setError('Não foi possível carregar seus cartões.'))
   }, [token, startDate, endDate, refresh])
 
   function handleLogin(newToken: string) {
@@ -97,7 +105,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onTransactionCreated={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -165,14 +173,18 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ summary, accounts, categories, token, onAccountCreated, onCategoryCreated, onTransactionCreated }: {
+function Dashboard({ summary, accounts, categories, creditCards, transactions, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged }: {
   summary: DashboardSummary
   accounts: Account[]
   categories: Category[]
+  creditCards: CreditCard[]
+  transactions: Transaction[]
   token: string
   onAccountCreated: (account: Account) => void
   onCategoryCreated: (category: Category) => void
+  onCreditCardCreated: (card: CreditCard) => void
   onTransactionCreated: () => void
+  onTransactionsChanged: () => void
 }) {
   return (
     <div className="dashboard">
@@ -200,16 +212,19 @@ function Dashboard({ summary, accounts, categories, token, onAccountCreated, onC
       </section>
       <AccountsSection accounts={accounts} token={token} onAccountCreated={onAccountCreated} />
       <CategoriesSection categories={categories} token={token} onCategoryCreated={onCategoryCreated} />
-      <TransactionsSection accounts={accounts} categories={categories} token={token} onCreated={onTransactionCreated} />
+      <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />
+      <TransactionsSection accounts={accounts} categories={categories} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={onTransactionsChanged} />
     </div>
   )
 }
 
-function TransactionsSection({ accounts, categories, token, onCreated }: {
+function TransactionsSection({ accounts, categories, transactions, token, onCreated, onChanged }: {
   accounts: Account[]
   categories: Category[]
+  transactions: Transaction[]
   token: string
   onCreated: () => void
+  onChanged: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [description, setDescription] = useState('')
@@ -222,14 +237,28 @@ function TransactionsSection({ accounts, categories, token, onCreated }: {
   const [installments, setInstallments] = useState('1')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const availableCategories = categories.filter((category) => category.type === type)
+  const [filter, setFilter] = useState<'ALL' | TransactionType>('ALL')
+
+  function resetForm() {
+    setDescription('')
+    setAmount('')
+    setType('EXPENSE')
+    setStatus('PAID')
+    setDate(new Date().toISOString().slice(0, 10))
+    setCategoryId('')
+    setAccountId('')
+    setInstallments('1')
+    setEditingId(null)
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     setSaving(true)
     setError('')
     try {
-      await createTransaction(token, {
+      const payload = {
         description,
         amount: Number(amount),
         type,
@@ -238,23 +267,57 @@ function TransactionsSection({ accounts, categories, token, onCreated }: {
         categoryId,
         accountId,
         totalInstallments: Number(installments),
-      })
-      setDescription('')
-      setAmount('')
+      }
+      if (editingId) {
+        await updateTransaction(token, editingId, payload)
+      } else {
+        await createTransaction(token, payload)
+      }
+      resetForm()
       setOpen(false)
-      onCreated()
+      if (editingId) onChanged()
+      else onCreated()
     } catch {
-      setError('Não foi possível cadastrar a movimentação. Confira conta e categoria.')
+      setError(editingId ? 'Não foi possível editar a movimentação. Confira conta e categoria.' : 'Não foi possível cadastrar a movimentação. Confira conta e categoria.')
     } finally {
       setSaving(false)
     }
+
+  }
+
+  async function remove(transaction: Transaction) {
+    if (!window.confirm(`Excluir "${transaction.description}"?`)) return
+    try {
+      await deleteTransaction(token, transaction.id)
+      onChanged()
+    } catch {
+      setError('Não foi possível excluir a movimentação.')
+    }
+  }
+
+  function edit(transaction: Transaction) {
+    if (!transaction.accountId || !transaction.categoryId) {
+      setError('Transações de cartão não podem ser editadas por esta tela.')
+      return
+    }
+    setEditingId(transaction.id)
+    setDescription(transaction.description)
+    setAmount(String(transaction.amount))
+    setType(transaction.type)
+    setStatus(transaction.status)
+    setDate(transaction.date)
+    setCategoryId(transaction.categoryId)
+    setAccountId(transaction.accountId)
+    setInstallments('1')
+    setError('')
+    setOpen(true)
   }
 
   return (
     <section className="card transaction-form-card">
       <div className="card-heading">
         <div><p className="eyebrow">Movimentações</p><h2>Receitas e despesas</h2></div>
-        <button className="primary-small-button" onClick={() => setOpen((current) => !current)}>{open ? 'Cancelar' : 'Nova movimentação'}</button>
+        <button className="primary-small-button" onClick={() => { if (open) resetForm(); setOpen((current) => !current) }}>{open ? 'Cancelar' : 'Nova movimentação'}</button>
       </div>
       {open && <form className="transaction-form" onSubmit={submit}>
         <label>Descrição<input required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex.: Supermercado" /></label>
@@ -264,11 +327,100 @@ function TransactionsSection({ accounts, categories, token, onCreated }: {
         <label>Data<input required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
         <label>Categoria<select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Selecione</option>{availableCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         <label>Conta<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Selecione</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-        <label>Parcelas<input min="1" max="60" type="number" value={installments} onChange={(event) => setInstallments(event.target.value)} /></label>
+        <label>Parcelas<input disabled={Boolean(editingId)} min="1" max="60" type="number" value={installments} onChange={(event) => setInstallments(event.target.value)} /></label>
         {error && <div className="alert error">{error}</div>}
-        <button className="primary-button" disabled={saving || accounts.length === 0 || availableCategories.length === 0}>{saving ? 'Salvando...' : 'Salvar movimentação'}</button>
+        <button className="primary-button" disabled={saving || accounts.length === 0 || availableCategories.length === 0}>{saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Salvar movimentação'}</button>
       </form>}
       <p className="transaction-help">{accounts.length === 0 ? 'Cadastre uma conta antes de adicionar movimentações.' : availableCategories.length === 0 ? 'Cadastre uma categoria do tipo selecionado.' : 'Registre suas movimentações para acompanhar o saldo no dashboard.'}</p>
+      <div className="transaction-filter">
+        <strong>Histórico</strong>
+        <select value={filter} onChange={(event) => setFilter(event.target.value as 'ALL' | TransactionType)}>
+          <option value="ALL">Todas</option><option value="INCOME">Receitas</option><option value="EXPENSE">Despesas</option>
+        </select>
+      </div>
+      <div className="transaction-history">
+        {transactions.filter((transaction) => filter === 'ALL' || transaction.type === filter).slice(0, 20).map((transaction) => (
+          <div className="transaction-row" key={transaction.id}>
+            <div className={`transaction-icon ${transaction.type === 'INCOME' ? 'income' : 'expense'}`}>{transaction.type === 'INCOME' ? '+' : '−'}</div>
+            <div className="transaction-description"><strong>{transaction.description}</strong><span>{transaction.categoryName ?? 'Sem categoria'} · {formatDate(transaction.date)}</span></div>
+            <strong className={transaction.type === 'INCOME' ? 'positive' : 'negative'}>{formatCurrency(transaction.amount)}</strong>
+            <button className="edit-button" title="Editar movimentação" onClick={() => edit(transaction)}>Editar</button>
+            <button className="delete-button" title="Excluir movimentação" onClick={() => remove(transaction)}>Excluir</button>
+          </div>
+        ))}
+        {transactions.length === 0 && <EmptyState text="Nenhuma movimentação cadastrada." />}
+      </div>
+    </section>
+  )
+}
+
+function CreditCardsSection({ cards, accounts, token, onCreated }: {
+  cards: CreditCard[]
+  accounts: Account[]
+  token: string
+  onCreated: (card: CreditCard) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [creditLimit, setCreditLimit] = useState('')
+  const [closingDay, setClosingDay] = useState('10')
+  const [dueDay, setDueDay] = useState('15')
+  const [accountId, setAccountId] = useState('')
+  const [color, setColor] = useState('#4fd1c5')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const card = await createCreditCard(token, {
+        name,
+        creditLimit: Number(creditLimit),
+        closingDay: Number(closingDay),
+        dueDay: Number(dueDay),
+        accountId,
+        color,
+      })
+      onCreated(card)
+      setName('')
+      setCreditLimit('')
+      setOpen(false)
+    } catch {
+      setError('Não foi possível cadastrar o cartão. Confira os dados informados.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="card cards-card" id="cards">
+      <div className="card-heading">
+        <div><p className="eyebrow">Crédito</p><h2>Cartões</h2></div>
+        <button className="primary-small-button" onClick={() => setOpen((current) => !current)}>{open ? 'Cancelar' : 'Novo cartão'}</button>
+      </div>
+      {open && <form className="card-form" onSubmit={submit}>
+        <label>Nome<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Nubank" /></label>
+        <label>Limite<input required min="0.01" step="0.01" type="number" value={creditLimit} onChange={(event) => setCreditLimit(event.target.value)} /></label>
+        <label>Fechamento<input required min="1" max="31" type="number" value={closingDay} onChange={(event) => setClosingDay(event.target.value)} /></label>
+        <label>Vencimento<input required min="1" max="31" type="number" value={dueDay} onChange={(event) => setDueDay(event.target.value)} /></label>
+        <label>Conta para pagamento<select value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Nenhuma</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        <label>Cor<input type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+        {error && <div className="alert error">{error}</div>}
+        <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar cartão'}</button>
+      </form>}
+      {cards.length === 0 ? <EmptyState text="Nenhum cartão cadastrado." /> : <div className="card-list">
+        {cards.map((card) => {
+          const usage = card.creditLimit > 0 ? ((card.creditLimit - card.availableLimit) / card.creditLimit) * 100 : 0
+          return <article className="credit-card-item" key={card.id} style={{ borderTopColor: card.color ?? '#4fd1c5' }}>
+            <div className="credit-card-heading"><strong>{card.name}</strong><span>Fecha dia {card.closingDay} · vence dia {card.dueDay}</span></div>
+            <div className="credit-card-values"><span>Disponível <strong>{formatCurrency(card.availableLimit)}</strong></span><span>Limite <strong>{formatCurrency(card.creditLimit)}</strong></span></div>
+            <div className="limit-bar"><span style={{ width: `${Math.min(usage, 100)}%`, background: card.color ?? '#4fd1c5' }} /></div>
+            <small>{card.accountName ? `Pagamento pela conta ${card.accountName}` : 'Sem conta de pagamento definida'}</small>
+          </article>
+        })}
+      </div>}
     </section>
   )
 }

@@ -33,4 +33,22 @@ public class TransactionController {
     public ResponseEntity<List<TransactionResponseDTO>> list(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(transactionService.listUserTransactions(user));
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<TransactionResponseDTO> update(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id,
+            @RequestBody @Valid TransactionRequestDTO dto
+    ) {
+        return ResponseEntity.ok(transactionService.updateTransaction(user, id, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id
+    ) {
+        transactionService.deleteTransaction(user, id);
+        return ResponseEntity.noContent().build();
+    }
 }

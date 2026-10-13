@@ -8,7 +8,9 @@ import java.time.LocalDate;
 
 public record TransactionResponseDTO(
         String id,
+        String accountId,
         String accountName,
+        String categoryId,
         String creditCardName,
         String invoiceId,
         String description,
@@ -21,7 +23,9 @@ public record TransactionResponseDTO(
     public TransactionResponseDTO(Transaction t) {
         this(
                 t.getId(),
+                t.getAccount() != null ? t.getAccount().getId() : null,
                 t.getAccount() != null ? t.getAccount().getName() : null,
+                t.getCategory() != null ? t.getCategory().getId() : null,
                 t.getCreditCard() != null ? t.getCreditCard().getName() : null,
                 t.getInvoice() != null ? t.getInvoice().getId() : null,
                 t.getDescription(),

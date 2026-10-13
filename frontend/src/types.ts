@@ -11,6 +11,17 @@ export interface Account {
   active: boolean
 }
 
+export interface CreditCard {
+  id: string
+  name: string
+  accountName: string | null
+  creditLimit: number
+  availableLimit: number
+  closingDay: number
+  dueDay: number
+  color: string | null
+}
+
 export interface Category {
   id: string
   name: string
@@ -28,7 +39,9 @@ export interface CategorySummary {
 
 export interface Transaction {
   id: string
+  accountId: string | null
   accountName: string | null
+  categoryId: string | null
   creditCardName: string | null
   description: string
   amount: number

@@ -152,4 +152,74 @@ public class TransactionService {
                 .map(TransactionResponseDTO::new)
                 .collect(Collectors.toList());
     }
+
+    @Transactional
+    public TransactionResponseDTO updateTransaction(User user, String transactionId, TransactionRequestDTO dto) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .filter(item -> item.getUser().getId().equals(user.getId()))
+                .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+
+        if (transaction.getCreditCard() != null) {
+            throw new RuntimeException("Edição de transações de cartão ainda não está disponível");
+        }
+
+        Category category = categoryRepository.findById(dto.categoryId())
+                .filter(item -> item.getUser().getId().equals(user.getId()))
+                .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+
+        Account newAccount = accountRepository.findById(dto.accountId())
+                .filter(item -> item.getUser().getId().equals(user.getId()))
+                .orElseThrow(() -> new RuntimeException("Conta não encontrada"));
+
+        revertAccountBalance(transaction);
+
+        transaction.setDescription(dto.description());
+        transaction.setAmount(dto.amount());
+        transaction.setType(dto.type());
+        transaction.setStatus(dto.status());
+        transaction.setDate(dto.date());
+        transaction.setCategory(category);
+        transaction.setAccount(newAccount);
+
+        applyAccountBalance(transaction);
+        return new TransactionResponseDTO(transactionRepository.save(transaction));
+    }
+
+    @Transactional
+    public void deleteTransaction(User user, String transactionId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .filter(item -> item.getUser().getId().equals(user.getId()))
+                .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+
+        revertAccountBalance(transaction);
+        transactionRepository.delete(transaction);
+    }
+
+    private void revertAccountBalance(Transaction transaction) {
+        if (transaction.getStatus() != TransactionStatus.PAID || transaction.getAccount() == null) {
+            return;
+        }
+
+        Account account = transaction.getAccount();
+        if (transaction.getType() == TransactionType.INCOME) {
+            account.setCurrentBalance(account.getCurrentBalance().subtract(transaction.getAmount()));
+        } else {
+            account.setCurrentBalance(account.getCurrentBalance().add(transaction.getAmount()));
+        }
+        accountRepository.save(account);
+    }
+
+    private void applyAccountBalance(Transaction transaction) {
+        if (transaction.getStatus() != TransactionStatus.PAID || transaction.getAccount() == null) {
+            return;
+        }
+
+        Account account = transaction.getAccount();
+        if (transaction.getType() == TransactionType.INCOME) {
+            account.setCurrentBalance(account.getCurrentBalance().add(transaction.getAmount()));
+        } else {
+            account.setCurrentBalance(account.getCurrentBalance().subtract(transaction.getAmount()));
+        }
+        accountRepository.save(account);
+    }
 }

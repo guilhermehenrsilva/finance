@@ -1,4 +1,4 @@
-import type { Account, Category, DashboardSummary, Transaction, TransactionStatus, TransactionType } from '../types'
+import type { Account, Category, CreditCard, DashboardSummary, Transaction, TransactionStatus, TransactionType } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 
@@ -35,6 +35,21 @@ export async function createAccount(token: string, account: { name: string; type
   return request<Account>('/accounts', { method: 'POST', headers: auth(token), body: JSON.stringify(account) })
 }
 
+export async function getCreditCards(token: string): Promise<CreditCard[]> {
+  return request<CreditCard[]>('/credit-cards', { headers: auth(token) })
+}
+
+export async function createCreditCard(token: string, card: {
+  name: string
+  accountId: string
+  creditLimit: number
+  closingDay: number
+  dueDay: number
+  color: string
+}): Promise<CreditCard> {
+  return request<CreditCard>('/credit-cards', { method: 'POST', headers: auth(token), body: JSON.stringify(card) })
+}
+
 export async function getCategories(token: string): Promise<Category[]> {
   return request<Category[]>('/categories', { headers: auth(token) })
 }
@@ -54,4 +69,25 @@ export async function createTransaction(token: string, transaction: {
   totalInstallments: number
 }): Promise<Transaction> {
   return request<Transaction>('/transactions', { method: 'POST', headers: auth(token), body: JSON.stringify(transaction) })
+}
+
+export async function updateTransaction(token: string, transactionId: string, transaction: {
+  description: string
+  amount: number
+  type: TransactionType
+  status: TransactionStatus
+  date: string
+  categoryId: string
+  accountId: string
+  totalInstallments: number
+}): Promise<Transaction> {
+  return request<Transaction>(`/transactions/${transactionId}`, { method: 'PUT', headers: auth(token), body: JSON.stringify(transaction) })
+}
+
+export async function getTransactions(token: string): Promise<Transaction[]> {
+  return request<Transaction[]>('/transactions', { headers: auth(token) })
+}
+
+export async function deleteTransaction(token: string, transactionId: string): Promise<void> {
+  await request<void>(`/transactions/${transactionId}`, { method: 'DELETE', headers: auth(token) })
 }
