@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { createAccount, createCategory, createCreditCard, createTransaction, deleteTransaction, getAccounts, getCategories, getCreditCards, getDashboard, getInvoices, getTransactions, login, register, updateTransaction } from './services/api'
-import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionType } from './types'
+import { createAccount, createCategory, createCreditCard, createTransaction, createTransfer, deleteTransaction, deleteTransfer, getAccounts, getCategories, getCreditCards, getDashboard, getInvoices, getTransactions, getTransfers, login, register, updateTransaction } from './services/api'
+import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionType, Transfer } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
 
@@ -40,6 +40,7 @@ function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [creditCards, setCreditCards] = useState<CreditCard[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [transfers, setTransfers] = useState<Transfer[]>([])
 
   useEffect(() => {
     if (!token) return
@@ -67,6 +68,9 @@ function App() {
     getInvoices(token)
       .then(setInvoices)
       .catch(() => setError('Não foi possível carregar suas faturas.'))
+    getTransfers(token)
+      .then(setTransfers)
+      .catch(() => setError('Não foi possível carregar suas transferências.'))
   }, [token, startDate, endDate, refresh])
 
   function handleLogin(newToken: string) {
@@ -109,7 +113,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -177,19 +181,21 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ summary, accounts, categories, creditCards, invoices, transactions, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged }: {
+function Dashboard({ summary, accounts, categories, creditCards, invoices, transactions, transfers, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged }: {
   summary: DashboardSummary
   accounts: Account[]
   categories: Category[]
   creditCards: CreditCard[]
   invoices: Invoice[]
   transactions: Transaction[]
+  transfers: Transfer[]
   token: string
   onAccountCreated: (account: Account) => void
   onCategoryCreated: (category: Category) => void
   onCreditCardCreated: (card: CreditCard) => void
   onTransactionCreated: () => void
   onTransactionsChanged: () => void
+  onTransfersChanged: () => void
 }) {
   return (
     <div className="dashboard">
@@ -216,11 +222,94 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
         {summary.recentTransactions.length === 0 ? <EmptyState text="Nenhuma movimentação encontrada." /> : <TransactionList transactions={summary.recentTransactions} />}
       </section>
       <AccountsSection accounts={accounts} token={token} onAccountCreated={onAccountCreated} />
+      <TransfersSection accounts={accounts} transfers={transfers} token={token} onChanged={onTransfersChanged} />
       <CategoriesSection categories={categories} token={token} onCategoryCreated={onCategoryCreated} />
       <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />
       <InvoicesSection invoices={invoices} />
       <TransactionsSection accounts={accounts} categories={categories} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={onTransactionsChanged} />
     </div>
+  )
+}
+
+function TransfersSection({ accounts, transfers, token, onChanged }: {
+  accounts: Account[]
+  transfers: Transfer[]
+  token: string
+  onChanged: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [sourceAccountId, setSourceAccountId] = useState('')
+  const [destinationAccountId, setDestinationAccountId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [description, setDescription] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function reset() {
+    setSourceAccountId('')
+    setDestinationAccountId('')
+    setAmount('')
+    setDate(new Date().toISOString().slice(0, 10))
+    setDescription('')
+    setError('')
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (sourceAccountId === destinationAccountId) {
+      setError('Selecione contas de origem e destino diferentes.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      await createTransfer(token, {
+        sourceAccountId,
+        destinationAccountId,
+        amount: Number(amount),
+        date,
+        description: description || undefined,
+      })
+      reset()
+      setOpen(false)
+      onChanged()
+    } catch {
+      setError('Não foi possível realizar a transferência. Confira o saldo e as contas.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function remove(transfer: Transfer) {
+    if (!window.confirm(`Estornar a transferência de ${formatCurrency(transfer.amount)}?`)) return
+    try {
+      await deleteTransfer(token, transfer.id)
+      onChanged()
+    } catch {
+      setError('Não foi possível estornar a transferência.')
+    }
+  }
+
+  return (
+    <section className="card transfers-card" id="transfers">
+      <div className="card-heading">
+        <div><p className="eyebrow">Movimentação interna</p><h2>Transferências</h2></div>
+        <button className="primary-small-button" onClick={() => { if (open) reset(); setOpen((current) => !current) }}>
+          {open ? 'Cancelar' : 'Nova transferência'}
+        </button>
+      </div>
+      {open && <form className="transfer-form" onSubmit={submit}>
+        <label>Conta de origem<select required value={sourceAccountId} onChange={(event) => setSourceAccountId(event.target.value)}><option value="">Selecione</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        <label>Conta de destino<select required value={destinationAccountId} onChange={(event) => setDestinationAccountId(event.target.value)}><option value="">Selecione</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        <label>Valor<input required min="0.01" step="0.01" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+        <label>Data<input required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
+        <label>Descrição<input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Opcional" /></label>
+        {error && <div className="alert error">{error}</div>}
+        <button className="primary-button" disabled={saving}>{saving ? 'Transferindo...' : 'Confirmar transferência'}</button>
+      </form>}
+      {transfers.length === 0 ? <EmptyState text="Nenhuma transferência registrada." /> : <div className="transfer-list">{transfers.map((transfer) => <div className="transfer-row" key={transfer.id}><div className="transfer-description"><strong>{transfer.sourceAccountName} → {transfer.destinationAccountName}</strong><span>{transfer.description || 'Transferência interna'} · {formatDate(transfer.date)}</span></div><strong>{formatCurrency(transfer.amount)}</strong><button className="delete-button" onClick={() => remove(transfer)}>Estornar</button></div>)}</div>}
+    </section>
   )
 }
 

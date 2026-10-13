@@ -78,3 +78,14 @@ export interface DashboardSummary {
   expensesByCategory: CategorySummary[]
   recentTransactions: Transaction[]
 }
+
+export interface Transfer {
+  id: string
+  sourceAccountId: string
+  sourceAccountName: string
+  destinationAccountId: string
+  destinationAccountName: string
+  amount: number
+  date: string
+  description: string | null
+}

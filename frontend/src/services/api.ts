@@ -1,4 +1,4 @@
-import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionStatus, TransactionType } from '../types'
+import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionStatus, TransactionType, Transfer } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 
@@ -94,4 +94,26 @@ export async function getTransactions(token: string): Promise<Transaction[]> {
 
 export async function deleteTransaction(token: string, transactionId: string): Promise<void> {
   await request<void>(`/transactions/${transactionId}`, { method: 'DELETE', headers: auth(token) })
+}
+
+export async function getTransfers(token: string): Promise<Transfer[]> {
+  return request<Transfer[]>('/transfers', { headers: auth(token) })
+}
+
+export async function createTransfer(token: string, transfer: {
+  sourceAccountId: string
+  destinationAccountId: string
+  amount: number
+  date: string
+  description?: string
+}): Promise<Transfer> {
+  return request<Transfer>('/transfers', {
+    method: 'POST',
+    headers: auth(token),
+    body: JSON.stringify(transfer),
+  })
+}
+
+export async function deleteTransfer(token: string, transferId: string): Promise<void> {
+  await request<void>(`/transfers/${transferId}`, { method: 'DELETE', headers: auth(token) })
 }

@@ -11,6 +11,8 @@ import com.finance.api.domain.creditcard.InvoiceRepository;
 import com.finance.api.domain.transaction.dto.TransactionRequestDTO;
 import com.finance.api.domain.transaction.dto.TransactionResponseDTO;
 import com.finance.api.domain.user.User;
+import com.finance.api.infra.exception.BusinessException;
+import com.finance.api.infra.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,10 +43,15 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponseDTO createTransaction(User user, TransactionRequestDTO dto) {
-        
+        validateTransactionType(dto);
+
+        if (dto.categoryId() == null || dto.categoryId().isBlank()) {
+            throw new BusinessException("A categoria é obrigatória para receitas e despesas");
+        }
+
         Category category = categoryRepository.findById(dto.categoryId())
                 .filter(cat -> cat.getUser().getId().equals(user.getId()))
-                .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
 
         int installments = (dto.totalInstallments() != null && dto.totalInstallments() > 1) ? dto.totalInstallments() : 1;
         BigDecimal installmentAmount = dto.amount().divide(new BigDecimal(installments), 2, RoundingMode.HALF_UP);
@@ -54,15 +61,18 @@ public class TransactionService {
 
         if (dto.creditCardId() != null && !dto.creditCardId().isBlank()) {
             if (dto.type() != TransactionType.EXPENSE) {
-                throw new RuntimeException("Cartões de crédito apenas aceitam despesas");
+                throw new BusinessException("Cartões de crédito apenas aceitam despesas");
             }
 
             CreditCard card = creditCardRepository.findById(dto.creditCardId())
                     .filter(c -> c.getUser().getId().equals(user.getId()))
-                    .orElseThrow(() -> new RuntimeException("Cartão não encontrado"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Cartão não encontrado"));
 
-            if (card.getAvailableLimit().compareTo(dto.amount()) < 0) {
-                throw new RuntimeException("Limite insuficiente no cartão de crédito");
+            BigDecimal availableLimit = card.getAvailableLimit() == null
+                    ? BigDecimal.ZERO
+                    : card.getAvailableLimit();
+            if (availableLimit.compareTo(dto.amount()) < 0) {
+                throw new BusinessException("Limite insuficiente no cartão de crédito");
             }
 
             card.setAvailableLimit(card.getAvailableLimit().subtract(dto.amount()));
@@ -115,7 +125,7 @@ public class TransactionService {
         } else if (dto.accountId() != null && !dto.accountId().isBlank()) {
             Account account = accountRepository.findById(dto.accountId())
                     .filter(acc -> acc.getUser().getId().equals(user.getId()))
-                    .orElseThrow(() -> new RuntimeException("Conta não encontrada"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Conta não encontrada"));
 
             Transaction transaction = new Transaction();
             transaction.setUser(user);
@@ -141,7 +151,7 @@ public class TransactionService {
 
             lastSavedTransaction = transactionRepository.save(transaction);
         } else {
-            throw new RuntimeException("É necessário informar uma Conta ou um Cartão de Crédito");
+            throw new BusinessException("É necessário informar uma Conta ou um Cartão de Crédito");
         }
 
         return new TransactionResponseDTO(lastSavedTransaction);
@@ -157,19 +167,21 @@ public class TransactionService {
     public TransactionResponseDTO updateTransaction(User user, String transactionId, TransactionRequestDTO dto) {
         Transaction transaction = transactionRepository.findById(transactionId)
                 .filter(item -> item.getUser().getId().equals(user.getId()))
-                .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
 
         if (transaction.getCreditCard() != null) {
-            throw new RuntimeException("Edição de transações de cartão ainda não está disponível");
+            throw new BusinessException("Edição de transações de cartão ainda não está disponível");
         }
+
+        validateTransactionType(dto);
 
         Category category = categoryRepository.findById(dto.categoryId())
                 .filter(item -> item.getUser().getId().equals(user.getId()))
-                .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
 
         Account newAccount = accountRepository.findById(dto.accountId())
                 .filter(item -> item.getUser().getId().equals(user.getId()))
-                .orElseThrow(() -> new RuntimeException("Conta não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Conta não encontrada"));
 
         revertAccountBalance(transaction);
 
@@ -189,7 +201,7 @@ public class TransactionService {
     public void deleteTransaction(User user, String transactionId) {
         Transaction transaction = transactionRepository.findById(transactionId)
                 .filter(item -> item.getUser().getId().equals(user.getId()))
-                .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
 
         revertAccountBalance(transaction);
         transactionRepository.delete(transaction);
@@ -201,6 +213,9 @@ public class TransactionService {
         }
 
         Account account = transaction.getAccount();
+        if (account.getCurrentBalance() == null) {
+            account.setCurrentBalance(BigDecimal.ZERO);
+        }
         if (transaction.getType() == TransactionType.INCOME) {
             account.setCurrentBalance(account.getCurrentBalance().subtract(transaction.getAmount()));
         } else {
@@ -215,11 +230,22 @@ public class TransactionService {
         }
 
         Account account = transaction.getAccount();
+        if (account.getCurrentBalance() == null) {
+            account.setCurrentBalance(BigDecimal.ZERO);
+        }
         if (transaction.getType() == TransactionType.INCOME) {
             account.setCurrentBalance(account.getCurrentBalance().add(transaction.getAmount()));
         } else {
             account.setCurrentBalance(account.getCurrentBalance().subtract(transaction.getAmount()));
         }
         accountRepository.save(account);
+    }
+
+    private void validateTransactionType(TransactionRequestDTO dto) {
+        if (dto.type() == TransactionType.TRANSFER) {
+            throw new BusinessException(
+                    "Transferências devem ser criadas pelo módulo de transferências"
+            );
+        }
     }
 }
