@@ -5,6 +5,8 @@ import com.finance.api.domain.account.AccountRepository;
 import com.finance.api.domain.creditcard.dto.CreditCardRequestDTO;
 import com.finance.api.domain.creditcard.dto.CreditCardResponseDTO;
 import com.finance.api.domain.user.User;
+import com.finance.api.infra.exception.BusinessException;
+import com.finance.api.infra.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -33,7 +35,7 @@ public class CreditCardService {
         if (dto.accountId() != null && !dto.accountId().isBlank()) {
             Account account = accountRepository.findById(dto.accountId())
                     .filter(acc -> acc.getUser().getId().equals(user.getId()))
-                    .orElseThrow(() -> new RuntimeException("Conta não encontrada ou não pertence ao usuário"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Conta não encontrada ou não pertence ao usuário"));
             card.setAccount(account);
         }
 

@@ -48,13 +48,20 @@ public class TransactionService {
         if (dto.categoryId() == null || dto.categoryId().isBlank()) {
             throw new BusinessException("A categoria é obrigatória para receitas e despesas");
         }
+        if (hasValue(dto.accountId()) && hasValue(dto.creditCardId())) {
+            throw new BusinessException("Informe uma conta ou um cartão de crédito, não ambos");
+        }
 
         Category category = categoryRepository.findById(dto.categoryId())
                 .filter(cat -> cat.getUser().getId().equals(user.getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
 
         int installments = (dto.totalInstallments() != null && dto.totalInstallments() > 1) ? dto.totalInstallments() : 1;
-        BigDecimal installmentAmount = dto.amount().divide(new BigDecimal(installments), 2, RoundingMode.HALF_UP);
+        BigDecimal installmentAmount = dto.amount().divide(
+                new BigDecimal(installments),
+                2,
+                RoundingMode.DOWN
+        );
         String installmentGroupId = installments > 1 ? UUID.randomUUID().toString() : null;
 
         Transaction lastSavedTransaction = null;
@@ -75,10 +82,13 @@ public class TransactionService {
                 throw new BusinessException("Limite insuficiente no cartão de crédito");
             }
 
-            card.setAvailableLimit(card.getAvailableLimit().subtract(dto.amount()));
+            card.setAvailableLimit(availableLimit.subtract(dto.amount()));
             creditCardRepository.save(card);
 
             for (int i = 1; i <= installments; i++) {
+                BigDecimal currentInstallmentAmount = i == installments
+                        ? dto.amount().subtract(installmentAmount.multiply(new BigDecimal(installments - 1)))
+                        : installmentAmount;
                 int invoiceMonth = dto.date().getMonthValue();
                 int invoiceYear = dto.date().getYear();
                 
@@ -102,14 +112,14 @@ public class TransactionService {
                             return invoiceRepository.save(newInvoice);
                         });
 
-                invoice.setTotalAmount(invoice.getTotalAmount().add(installmentAmount));
+                invoice.setTotalAmount(invoice.getTotalAmount().add(currentInstallmentAmount));
                 invoiceRepository.save(invoice);
 
                 Transaction transaction = new Transaction();
                 transaction.setUser(user);
                 transaction.setCategory(category);
                 transaction.setDescription(installments > 1 ? dto.description() + " (" + i + "/" + installments + ")" : dto.description());
-                transaction.setAmount(installmentAmount);
+                transaction.setAmount(currentInstallmentAmount);
                 transaction.setType(dto.type());
                 transaction.setStatus(dto.status());
                 transaction.setDate(dto.date().plusMonths(i - 1));
@@ -247,5 +257,9 @@ public class TransactionService {
                     "Transferências devem ser criadas pelo módulo de transferências"
             );
         }
+    }
+
+    private boolean hasValue(String value) {
+        return value != null && !value.isBlank();
     }
 }
