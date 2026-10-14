@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { createAccount, createCategory, createCreditCard, createTransaction, createTransfer, deleteTransaction, deleteTransfer, getAccounts, getCategories, getCreditCards, getDashboard, getInvoices, getTransactions, getTransfers, login, payInvoice, register, updateTransaction } from './services/api'
-import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionType, Transfer } from './types'
+import { createAccount, createCategory, createCreditCard, createRecurringTransaction, createTransaction, createTransfer, deleteRecurringTransaction, deleteTransaction, deleteTransfer, getAccounts, getCategories, getCreditCards, getDashboard, getInvoices, getRecurringTransactions, getTransactions, getTransfers, login, payInvoice, register, toggleRecurringTransaction, updateTransaction } from './services/api'
+import type { Account, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionType, Transfer } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
 
@@ -41,6 +41,7 @@ function App() {
   const [creditCards, setCreditCards] = useState<CreditCard[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
+  const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([])
 
   useEffect(() => {
     if (!token) return
@@ -71,6 +72,9 @@ function App() {
     getTransfers(token)
       .then(setTransfers)
       .catch(() => setError('Não foi possível carregar suas transferências.'))
+    getRecurringTransactions(token)
+      .then(setRecurringTransactions)
+      .catch(() => setError('Não foi possível carregar suas transações recorrentes.'))
   }, [token, startDate, endDate, refresh])
 
   function handleLogin(newToken: string) {
@@ -92,6 +96,7 @@ function App() {
           <a className="nav-item" href="#transactions">Movimentações</a>
           <a className="nav-item" href="#accounts">Contas</a>
           <a className="nav-item" href="#cards">Cartões</a>
+          <a className="nav-item" href="#recurring">Recorrências</a>
         </nav>
         <button className="logout-button" onClick={() => {
           localStorage.removeItem(TOKEN_KEY)
@@ -113,7 +118,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -181,7 +186,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ summary, accounts, categories, creditCards, invoices, transactions, transfers, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged }: {
+function Dashboard({ summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged }: {
   summary: DashboardSummary
   accounts: Account[]
   categories: Category[]
@@ -189,6 +194,7 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
   invoices: Invoice[]
   transactions: Transaction[]
   transfers: Transfer[]
+  recurringTransactions: RecurringTransaction[]
   token: string
   onAccountCreated: (account: Account) => void
   onCategoryCreated: (category: Category) => void
@@ -197,6 +203,7 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
   onTransactionsChanged: () => void
   onTransfersChanged: () => void
   onInvoicesChanged: () => void
+  onRecurringChanged: () => void
 }) {
   return (
     <div className="dashboard">
@@ -227,6 +234,7 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
       <CategoriesSection categories={categories} token={token} onCategoryCreated={onCategoryCreated} />
       <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />
       <InvoicesSection invoices={invoices} accounts={accounts} token={token} onChanged={onInvoicesChanged} />
+      <RecurringTransactionsSection recurringTransactions={recurringTransactions} accounts={accounts} categories={categories} creditCards={creditCards} token={token} onChanged={onRecurringChanged} />
       <TransactionsSection accounts={accounts} categories={categories} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={onTransactionsChanged} />
     </div>
   )
@@ -585,6 +593,130 @@ function InvoicesSection({ invoices, accounts, token, onChanged }: {
             <button type="button" className="text-button" onClick={() => setPaymentInvoiceId(null)}>Cancelar</button>
             {error && <div className="alert error">{error}</div>}
           </form>}
+        </article>)}
+      </div>}
+    </section>
+  )
+}
+
+function RecurringTransactionsSection({ recurringTransactions, accounts, categories, creditCards, token, onChanged }: {
+  recurringTransactions: RecurringTransaction[]
+  accounts: Account[]
+  categories: Category[]
+  creditCards: CreditCard[]
+  token: string
+  onChanged: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [description, setDescription] = useState('')
+  const [amount, setAmount] = useState('')
+  const [type, setType] = useState<TransactionType>('EXPENSE')
+  const [frequency, setFrequency] = useState<RecurringFrequency>('MONTHLY')
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [endDate, setEndDate] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [accountId, setAccountId] = useState('')
+  const [creditCardId, setCreditCardId] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const availableCategories = categories.filter((category) => category.type === type)
+
+  function reset() {
+    setDescription('')
+    setAmount('')
+    setType('EXPENSE')
+    setFrequency('MONTHLY')
+    setStartDate(new Date().toISOString().slice(0, 10))
+    setEndDate('')
+    setCategoryId('')
+    setAccountId('')
+    setCreditCardId('')
+    setError('')
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if ((accountId && creditCardId) || (!accountId && !creditCardId)) {
+      setError('Selecione uma conta ou um cartão de crédito.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      await createRecurringTransaction(token, {
+        description,
+        amount: Number(amount),
+        type,
+        frequency,
+        startDate,
+        ...(endDate ? { endDate } : {}),
+        categoryId,
+        ...(accountId ? { accountId } : {}),
+        ...(creditCardId ? { creditCardId } : {}),
+      })
+      reset()
+      setOpen(false)
+      onChanged()
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível criar a recorrência.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function toggle(item: RecurringTransaction) {
+    try {
+      await toggleRecurringTransaction(token, item.id)
+      onChanged()
+    } catch {
+      setError('Não foi possível alterar o status da recorrência.')
+    }
+  }
+
+  async function remove(item: RecurringTransaction) {
+    if (!window.confirm(`Excluir a recorrência "${item.description}"?`)) return
+    try {
+      await deleteRecurringTransaction(token, item.id)
+      onChanged()
+    } catch {
+      setError('Não foi possível excluir a recorrência.')
+    }
+  }
+
+  const frequencyLabel: Record<RecurringFrequency, string> = {
+    WEEKLY: 'Semanal',
+    MONTHLY: 'Mensal',
+    YEARLY: 'Anual',
+  }
+
+  return (
+    <section className="card recurring-card" id="recurring">
+      <div className="card-heading">
+        <div><p className="eyebrow">Automação</p><h2>Transações recorrentes</h2></div>
+        <button className="primary-small-button" onClick={() => { if (open) reset(); setOpen((current) => !current) }}>
+          {open ? 'Cancelar' : 'Nova recorrência'}
+        </button>
+      </div>
+      {open && <form className="recurring-form" onSubmit={submit}>
+        <label>Descrição<input required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex.: Aluguel" /></label>
+        <label>Valor<input required min="0.01" step="0.01" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+        <label>Tipo<select value={type} onChange={(event) => { setType(event.target.value as TransactionType); setCategoryId(''); setCreditCardId('') }}><option value="EXPENSE">Despesa</option><option value="INCOME">Receita</option></select></label>
+        <label>Frequência<select value={frequency} onChange={(event) => setFrequency(event.target.value as RecurringFrequency)}><option value="WEEKLY">Semanal</option><option value="MONTHLY">Mensal</option><option value="YEARLY">Anual</option></select></label>
+        <label>Início<input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
+        <label>Fim (opcional)<input type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label>
+        <label>Categoria<select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Selecione</option>{availableCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        <label>Conta<select value={accountId} onChange={(event) => { setAccountId(event.target.value); setCreditCardId('') }}><option value="">Nenhuma</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        {type === 'EXPENSE' && <label>Cartão<select value={creditCardId} onChange={(event) => { setCreditCardId(event.target.value); setAccountId('') }}><option value="">Nenhum</option>{creditCards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select></label>}
+        {error && <div className="alert error">{error}</div>}
+        <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar recorrência'}</button>
+      </form>}
+      {recurringTransactions.length === 0 ? <EmptyState text="Nenhuma transação recorrente cadastrada." /> : <div className="recurring-list">
+        {recurringTransactions.map((item) => <article className="recurring-row" key={item.id}>
+          <div className="recurring-description"><strong>{item.description}</strong><span>{frequencyLabel[item.frequency]} · próxima em {formatDate(item.nextDate)}</span></div>
+          <strong>{formatCurrency(item.amount)}</strong>
+          <span className={`recurring-status ${item.active ? 'active' : 'paused'}`}>{item.active ? 'Ativa' : 'Pausada'}</span>
+          <button className="text-button" onClick={() => toggle(item)}>{item.active ? 'Pausar' : 'Reativar'}</button>
+          <button className="delete-button" onClick={() => remove(item)}>Excluir</button>
         </article>)}
       </div>}
     </section>

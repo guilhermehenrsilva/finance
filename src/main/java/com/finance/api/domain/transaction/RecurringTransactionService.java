@@ -8,6 +8,8 @@ import com.finance.api.domain.transaction.dto.RecurringTransactionRequestDTO;
 import com.finance.api.domain.transaction.dto.RecurringTransactionResponseDTO;
 import com.finance.api.domain.transaction.dto.TransactionRequestDTO;
 import com.finance.api.domain.user.User;
+import com.finance.api.infra.exception.BusinessException;
+import com.finance.api.infra.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -38,36 +40,36 @@ public class RecurringTransactionService {
     @Scheduled(cron = "0 0 2 * * *")
     @Transactional
     public void processRecurringTransactions() {
-        LocalDate today = LocalDate.now();
+        processRecurringTransactions(LocalDate.now());
+    }
+
+    @Transactional
+    void processRecurringTransactions(LocalDate today) {
         List<RecurringTransaction> recurrings = recurringRepository.findAllByActiveTrueAndNextDateLessThanEqual(today);
 
         for (RecurringTransaction recurring : recurrings) {
-            
-            // 1. Cria a transação real reutilizando a lógica que já existe
-            TransactionRequestDTO dto = new TransactionRequestDTO(
-                    recurring.getDescription(),
-                    recurring.getAmount(),
-                    recurring.getType(),
-                    TransactionStatus.PENDING, // Lançado como pendente para não afetar saldo da conta bancária até ser pago de fato
-                    recurring.getNextDate(),
-                    recurring.getCategory().getId(),
-                    recurring.getAccount() != null ? recurring.getAccount().getId() : null,
-                    recurring.getCreditCard() != null ? recurring.getCreditCard().getId() : null,
-                    1
-            );
+            while (recurring.getNextDate().isBefore(today) || recurring.getNextDate().isEqual(today)) {
+                if (recurring.getEndDate() != null && recurring.getNextDate().isAfter(recurring.getEndDate())) {
+                    recurring.setActive(false);
+                    break;
+                }
 
-            transactionService.createTransaction(recurring.getUser(), dto);
+                TransactionRequestDTO dto = new TransactionRequestDTO(
+                        recurring.getDescription(),
+                        recurring.getAmount(),
+                        recurring.getType(),
+                        TransactionStatus.PENDING,
+                        recurring.getNextDate(),
+                        recurring.getCategory().getId(),
+                        recurring.getAccount() != null ? recurring.getAccount().getId() : null,
+                        recurring.getCreditCard() != null ? recurring.getCreditCard().getId() : null,
+                        1
+                );
 
-            // 2. Calcula a próxima data com base na frequência
-            if (recurring.getFrequency() == RecurringFrequency.MONTHLY) {
-                recurring.setNextDate(recurring.getNextDate().plusMonths(1));
-            } else if (recurring.getFrequency() == RecurringFrequency.WEEKLY) {
-                recurring.setNextDate(recurring.getNextDate().plusWeeks(1));
-            } else if (recurring.getFrequency() == RecurringFrequency.YEARLY) {
-                recurring.setNextDate(recurring.getNextDate().plusYears(1));
+                transactionService.createTransaction(recurring.getUser(), dto);
+                recurring.setNextDate(nextDate(recurring.getNextDate(), recurring.getFrequency()));
             }
 
-            // 3. Desativa se ultrapassou a data final estipulada
             if (recurring.getEndDate() != null && recurring.getNextDate().isAfter(recurring.getEndDate())) {
                 recurring.setActive(false);
             }
@@ -76,11 +78,20 @@ public class RecurringTransactionService {
         }
     }
 
+    private LocalDate nextDate(LocalDate date, RecurringFrequency frequency) {
+        return switch (frequency) {
+            case WEEKLY -> date.plusWeeks(1);
+            case MONTHLY -> date.plusMonths(1);
+            case YEARLY -> date.plusYears(1);
+        };
+    }
+
     @Transactional
     public RecurringTransactionResponseDTO create(User user, RecurringTransactionRequestDTO dto) {
+        validateRequest(dto);
         Category category = categoryRepository.findById(dto.categoryId())
                 .filter(c -> c.getUser().getId().equals(user.getId()))
-                .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
 
         RecurringTransaction recurring = new RecurringTransaction();
         recurring.setUser(user);
@@ -97,15 +108,54 @@ public class RecurringTransactionService {
         if (dto.accountId() != null) {
             recurring.setAccount(accountRepository.findById(dto.accountId())
                     .filter(a -> a.getUser().getId().equals(user.getId()))
-                    .orElseThrow(() -> new RuntimeException("Conta não encontrada")));
+                    .orElseThrow(() -> new ResourceNotFoundException("Conta não encontrada")));
         } else if (dto.creditCardId() != null) {
             recurring.setCreditCard(creditCardRepository.findById(dto.creditCardId())
                     .filter(c -> c.getUser().getId().equals(user.getId()))
-                    .orElseThrow(() -> new RuntimeException("Cartão não encontrado")));
+                    .orElseThrow(() -> new ResourceNotFoundException("Cartão não encontrado")));
         } else {
-            throw new RuntimeException("Informe uma Conta ou Cartão de Crédito");
+            throw new BusinessException("Informe uma Conta ou Cartão de Crédito");
         }
 
         return new RecurringTransactionResponseDTO(recurringRepository.save(recurring));
+    }
+
+    @Transactional(readOnly = true)
+    public List<RecurringTransactionResponseDTO> list(User user) {
+        return recurringRepository.findByUserOrderByNextDateAsc(user).stream()
+                .map(RecurringTransactionResponseDTO::new)
+                .toList();
+    }
+
+    @Transactional
+    public RecurringTransactionResponseDTO toggle(User user, String id) {
+        RecurringTransaction recurring = findUserRecurring(user, id);
+        recurring.setActive(!Boolean.TRUE.equals(recurring.getActive()));
+        return new RecurringTransactionResponseDTO(recurringRepository.save(recurring));
+    }
+
+    @Transactional
+    public void delete(User user, String id) {
+        recurringRepository.delete(findUserRecurring(user, id));
+    }
+
+    private RecurringTransaction findUserRecurring(User user, String id) {
+        return recurringRepository.findById(id)
+                .filter(item -> item.getUser().getId().equals(user.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Transação recorrente não encontrada"));
+    }
+
+    private void validateRequest(RecurringTransactionRequestDTO dto) {
+        if (dto.type() == TransactionType.TRANSFER) {
+            throw new BusinessException("Transações recorrentes não podem ser transferências");
+        }
+        if (dto.endDate() != null && dto.endDate().isBefore(dto.startDate())) {
+            throw new BusinessException("A data final não pode ser anterior à data de início");
+        }
+        boolean hasAccount = dto.accountId() != null && !dto.accountId().isBlank();
+        boolean hasCard = dto.creditCardId() != null && !dto.creditCardId().isBlank();
+        if (hasAccount == hasCard) {
+            throw new BusinessException("Informe exatamente uma Conta ou Cartão de Crédito");
+        }
     }
 }

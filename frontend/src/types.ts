@@ -1,5 +1,6 @@
 export type TransactionType = 'INCOME' | 'EXPENSE'
 export type TransactionStatus = 'PENDING' | 'PAID'
+export type RecurringFrequency = 'WEEKLY' | 'MONTHLY' | 'YEARLY'
 
 export interface Account {
   id: string
@@ -88,4 +89,14 @@ export interface Transfer {
   amount: number
   date: string
   description: string | null
+}
+
+export interface RecurringTransaction {
+  id: string
+  description: string
+  amount: number
+  type: TransactionType
+  frequency: RecurringFrequency
+  nextDate: string
+  active: boolean
 }

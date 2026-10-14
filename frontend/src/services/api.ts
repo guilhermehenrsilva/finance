@@ -1,24 +1,31 @@
-import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionStatus, TransactionType, Transfer } from '../types'
+import type { Account, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionStatus, TransactionType, Transfer } from '../types'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
+const API_URL = import.meta.env.VITE_API_URL
+  ?? `${window.location.protocol}//${window.location.hostname}:8080/api`
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options.headers },
   })
+  const body = await response.text()
+
   if (!response.ok) {
-    const body = await response.text()
     try {
       const error = JSON.parse(body) as { message?: string }
-      throw new Error(error.message ?? 'Não foi possível concluir a solicitação.')
+      throw new Error(error.message ?? `A API recusou a solicitação (${response.status}).`)
     } catch (error) {
-      if (error instanceof Error && error.message !== 'Não foi possível concluir a solicitação.') throw error
-      throw new Error('Não foi possível concluir a solicitação.')
+      if (error instanceof Error && error.message !== 'Unexpected end of JSON input') throw error
+      throw new Error(`A API recusou a solicitação (${response.status}).`)
     }
   }
-  const body = await response.text()
-  return (body ? JSON.parse(body) : undefined) as T
+
+  if (!body.trim()) return undefined as T
+  try {
+    return JSON.parse(body) as T
+  } catch {
+    throw new Error('A API retornou uma resposta inválida.')
+  }
 }
 
 const auth = (token: string): HeadersInit => ({ Authorization: `Bearer ${token}` })
@@ -136,4 +143,37 @@ export async function createTransfer(token: string, transfer: {
 
 export async function deleteTransfer(token: string, transferId: string): Promise<void> {
   await request<void>(`/transfers/${transferId}`, { method: 'DELETE', headers: auth(token) })
+}
+
+export async function getRecurringTransactions(token: string): Promise<RecurringTransaction[]> {
+  return request<RecurringTransaction[]>('/recurring-transactions', { headers: auth(token) })
+}
+
+export async function createRecurringTransaction(token: string, recurring: {
+  description: string
+  amount: number
+  type: TransactionType
+  frequency: RecurringFrequency
+  startDate: string
+  endDate?: string
+  categoryId: string
+  accountId?: string
+  creditCardId?: string
+}): Promise<RecurringTransaction> {
+  return request<RecurringTransaction>('/recurring-transactions', {
+    method: 'POST',
+    headers: auth(token),
+    body: JSON.stringify(recurring),
+  })
+}
+
+export async function toggleRecurringTransaction(token: string, recurringId: string): Promise<RecurringTransaction> {
+  return request<RecurringTransaction>(`/recurring-transactions/${recurringId}/toggle`, {
+    method: 'PATCH',
+    headers: auth(token),
+  })
+}
+
+export async function deleteRecurringTransaction(token: string, recurringId: string): Promise<void> {
+  await request<void>(`/recurring-transactions/${recurringId}`, { method: 'DELETE', headers: auth(token) })
 }

@@ -9,4 +9,6 @@ public interface RecurringTransactionRepository extends JpaRepository<RecurringT
     
     // Busca todas as recorrências ativas cuja próxima data de cobrança chegou ou já passou
     List<RecurringTransaction> findAllByActiveTrueAndNextDateLessThanEqual(LocalDate date);
+
+    List<RecurringTransaction> findByUserOrderByNextDateAsc(com.finance.api.domain.user.User user);
 }
