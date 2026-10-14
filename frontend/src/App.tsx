@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { createAccount, createCategory, createCreditCard, createTransaction, createTransfer, deleteTransaction, deleteTransfer, getAccounts, getCategories, getCreditCards, getDashboard, getInvoices, getTransactions, getTransfers, login, register, updateTransaction } from './services/api'
+import { createAccount, createCategory, createCreditCard, createTransaction, createTransfer, deleteTransaction, deleteTransfer, getAccounts, getCategories, getCreditCards, getDashboard, getInvoices, getTransactions, getTransfers, login, payInvoice, register, updateTransaction } from './services/api'
 import type { Account, Category, CreditCard, DashboardSummary, Invoice, Transaction, TransactionType, Transfer } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
@@ -113,7 +113,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -181,7 +181,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ summary, accounts, categories, creditCards, invoices, transactions, transfers, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged }: {
+function Dashboard({ summary, accounts, categories, creditCards, invoices, transactions, transfers, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged }: {
   summary: DashboardSummary
   accounts: Account[]
   categories: Category[]
@@ -196,6 +196,7 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
   onTransactionCreated: () => void
   onTransactionsChanged: () => void
   onTransfersChanged: () => void
+  onInvoicesChanged: () => void
 }) {
   return (
     <div className="dashboard">
@@ -225,7 +226,7 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
       <TransfersSection accounts={accounts} transfers={transfers} token={token} onChanged={onTransfersChanged} />
       <CategoriesSection categories={categories} token={token} onCategoryCreated={onCategoryCreated} />
       <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />
-      <InvoicesSection invoices={invoices} />
+      <InvoicesSection invoices={invoices} accounts={accounts} token={token} onChanged={onInvoicesChanged} />
       <TransactionsSection accounts={accounts} categories={categories} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={onTransactionsChanged} />
     </div>
   )
@@ -520,11 +521,47 @@ function CreditCardsSection({ cards, accounts, token, onCreated }: {
   )
 }
 
-function InvoicesSection({ invoices }: { invoices: Invoice[] }) {
+function InvoicesSection({ invoices, accounts, token, onChanged }: {
+  invoices: Invoice[]
+  accounts: Account[]
+  token: string
+  onChanged: () => void
+}) {
   const [cardFilter, setCardFilter] = useState('ALL')
+  const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null)
+  const [accountId, setAccountId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
   const visibleInvoices = invoices.filter((invoice) => cardFilter === 'ALL' || invoice.creditCardId === cardFilter)
   const monthName = (month: number) => new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(2024, month - 1, 1))
   const statusLabel: Record<Invoice['status'], string> = { OPEN: 'Aberta', CLOSED: 'Fechada', PAID: 'Paga' }
+
+  function startPayment(invoice: Invoice) {
+    setPaymentInvoiceId(invoice.id)
+    setAccountId(accounts[0]?.id ?? '')
+    setAmount('')
+    setError('')
+  }
+
+  async function submitPayment(event: FormEvent) {
+    event.preventDefault()
+    if (!paymentInvoiceId || !accountId) return
+    setSaving(true)
+    setError('')
+    try {
+      await payInvoice(token, paymentInvoiceId, {
+        accountId,
+        ...(amount ? { amount: Number(amount) } : {}),
+      })
+      setPaymentInvoiceId(null)
+      onChanged()
+    } catch (paymentError) {
+      setError(paymentError instanceof Error ? paymentError.message : 'Não foi possível pagar a fatura.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <section className="card invoices-card" id="invoices">
@@ -540,6 +577,14 @@ function InvoicesSection({ invoices }: { invoices: Invoice[] }) {
           <div className="invoice-main"><strong>{invoice.creditCardName}</strong><span>{monthName(invoice.month)} de {invoice.year} · vence em {formatDate(invoice.dueDate)}</span></div>
           <div className="invoice-amount"><strong>{formatCurrency(invoice.remainingAmount)}</strong><span>de {formatCurrency(invoice.totalAmount)}</span></div>
           <span className={`invoice-status ${invoice.status.toLowerCase()}`}>{statusLabel[invoice.status]}</span>
+          {invoice.status !== 'PAID' && invoice.remainingAmount > 0 && <button className="primary-small-button" onClick={() => startPayment(invoice)}>Pagar</button>}
+          {paymentInvoiceId === invoice.id && <form className="invoice-payment-form" onSubmit={submitPayment}>
+            <label>Conta<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Selecione</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+            <label>Valor parcial <input type="number" min="0.01" max={invoice.remainingAmount} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={`Total: ${invoice.remainingAmount.toFixed(2)}`} /></label>
+            <button className="primary-small-button" disabled={saving}>{saving ? 'Pagando...' : 'Confirmar'}</button>
+            <button type="button" className="text-button" onClick={() => setPaymentInvoiceId(null)}>Cancelar</button>
+            {error && <div className="alert error">{error}</div>}
+          </form>}
         </article>)}
       </div>}
     </section>

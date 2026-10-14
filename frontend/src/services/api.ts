@@ -7,7 +7,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options.headers },
   })
-  if (!response.ok) throw new Error('Não foi possível concluir a solicitação.')
+  if (!response.ok) {
+    const body = await response.text()
+    try {
+      const error = JSON.parse(body) as { message?: string }
+      throw new Error(error.message ?? 'Não foi possível concluir a solicitação.')
+    } catch (error) {
+      if (error instanceof Error && error.message !== 'Não foi possível concluir a solicitação.') throw error
+      throw new Error('Não foi possível concluir a solicitação.')
+    }
+  }
   const body = await response.text()
   return (body ? JSON.parse(body) : undefined) as T
 }
@@ -52,6 +61,17 @@ export async function createCreditCard(token: string, card: {
 
 export async function getInvoices(token: string): Promise<Invoice[]> {
   return request<Invoice[]>('/invoices', { headers: auth(token) })
+}
+
+export async function payInvoice(token: string, invoiceId: string, payment: {
+  accountId: string
+  amount?: number
+}): Promise<Invoice> {
+  return request<Invoice>(`/invoices/${invoiceId}/pay`, {
+    method: 'POST',
+    headers: auth(token),
+    body: JSON.stringify(payment),
+  })
 }
 
 export async function getCategories(token: string): Promise<Category[]> {
