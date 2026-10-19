@@ -22,6 +22,7 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.time.LocalDate;
 
 @Service
 public class TransactionService {
@@ -171,6 +172,40 @@ public class TransactionService {
         return transactionRepository.findByUserOrderByDateDesc(user).stream()
                 .map(TransactionResponseDTO::new)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponseDTO> searchUserTransactions(
+            User user,
+            LocalDate startDate,
+            LocalDate endDate,
+            TransactionType type,
+            TransactionStatus status,
+            String categoryId,
+            String accountId,
+            String creditCardId,
+            String description
+    ) {
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            throw new BusinessException("A data final não pode ser anterior à data inicial");
+        }
+        return transactionRepository.search(
+                        user,
+                        startDate,
+                        endDate,
+                        type,
+                        status,
+                        blankToNull(categoryId),
+                        blankToNull(accountId),
+                        blankToNull(creditCardId),
+                        blankToNull(description)
+                ).stream()
+                .map(TransactionResponseDTO::new)
+                .collect(Collectors.toList());
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     @Transactional

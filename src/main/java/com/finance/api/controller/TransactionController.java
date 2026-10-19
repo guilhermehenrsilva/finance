@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/transactions")
@@ -30,8 +31,20 @@ public class TransactionController {
     }
 
     @GetMapping
-    public ResponseEntity<List<TransactionResponseDTO>> list(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(transactionService.listUserTransactions(user));
+    public ResponseEntity<List<TransactionResponseDTO>> list(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate,
+            @RequestParam(required = false) com.finance.api.domain.transaction.TransactionType type,
+            @RequestParam(required = false) com.finance.api.domain.transaction.TransactionStatus status,
+            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) String accountId,
+            @RequestParam(required = false) String creditCardId,
+            @RequestParam(required = false) String description
+    ) {
+        return ResponseEntity.ok(transactionService.searchUserTransactions(
+                user, startDate, endDate, type, status, categoryId, accountId, creditCardId, description
+        ));
     }
 
     @PutMapping("/{id}")

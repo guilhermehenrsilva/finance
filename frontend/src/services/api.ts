@@ -115,8 +115,22 @@ export async function updateTransaction(token: string, transactionId: string, tr
   return request<Transaction>(`/transactions/${transactionId}`, { method: 'PUT', headers: auth(token), body: JSON.stringify(transaction) })
 }
 
-export async function getTransactions(token: string): Promise<Transaction[]> {
-  return request<Transaction[]>('/transactions', { headers: auth(token) })
+export async function getTransactions(token: string, filters: {
+  startDate?: string
+  endDate?: string
+  type?: TransactionType
+  status?: TransactionStatus
+  categoryId?: string
+  accountId?: string
+  creditCardId?: string
+  description?: string
+} = {}): Promise<Transaction[]> {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, value)
+  })
+  const query = params.toString()
+  return request<Transaction[]>(`/transactions${query ? `?${query}` : ''}`, { headers: auth(token) })
 }
 
 export async function deleteTransaction(token: string, transactionId: string): Promise<void> {

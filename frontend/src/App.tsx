@@ -60,7 +60,7 @@ function App() {
     getCategories(token)
       .then(setCategories)
       .catch(() => setError('Não foi possível carregar suas categorias.'))
-    getTransactions(token)
+    getTransactions(token, { startDate, endDate })
       .then(setTransactions)
       .catch(() => setError('Não foi possível carregar suas movimentações.'))
     getCreditCards(token)
@@ -235,7 +235,7 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
       <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />
       <InvoicesSection invoices={invoices} accounts={accounts} token={token} onChanged={onInvoicesChanged} />
       <RecurringTransactionsSection recurringTransactions={recurringTransactions} accounts={accounts} categories={categories} creditCards={creditCards} token={token} onChanged={onRecurringChanged} />
-      <TransactionsSection accounts={accounts} categories={categories} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={onTransactionsChanged} />
+      <TransactionsSection accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={onTransactionsChanged} />
     </div>
   )
 }
@@ -322,9 +322,10 @@ function TransfersSection({ accounts, transfers, token, onChanged }: {
   )
 }
 
-function TransactionsSection({ accounts, categories, transactions, token, onCreated, onChanged }: {
+function TransactionsSection({ accounts, categories, creditCards, transactions, token, onCreated, onChanged }: {
   accounts: Account[]
   categories: Category[]
+  creditCards: CreditCard[]
   transactions: Transaction[]
   token: string
   onCreated: () => void
@@ -343,7 +344,22 @@ function TransactionsSection({ accounts, categories, transactions, token, onCrea
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const availableCategories = categories.filter((category) => category.type === type)
+  const filteredTransactions = transactions.filter((transaction) => {
+    const typeMatches = filter === 'ALL' || transaction.type === filter
+    const statusMatches = filterStatus === 'ALL' || transaction.status === filterStatus
+    const categoryMatches = filterCategoryId === 'ALL' || transaction.categoryId === filterCategoryId
+    const accountMatches = filterAccountId === 'ALL' || transaction.accountId === filterAccountId
+    const selectedCard = creditCards.find((card) => card.id === filterCreditCardId)
+    const cardMatches = filterCreditCardId === 'ALL' || transaction.creditCardName === selectedCard?.name
+    const descriptionMatches = !filterDescription.trim() || transaction.description.toLowerCase().includes(filterDescription.trim().toLowerCase())
+    return typeMatches && statusMatches && categoryMatches && accountMatches && cardMatches && descriptionMatches
+  })
   const [filter, setFilter] = useState<'ALL' | TransactionType>('ALL')
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL')
+  const [filterCategoryId, setFilterCategoryId] = useState('ALL')
+  const [filterAccountId, setFilterAccountId] = useState('ALL')
+  const [filterCreditCardId, setFilterCreditCardId] = useState('ALL')
+  const [filterDescription, setFilterDescription] = useState('')
 
   function resetForm() {
     setDescription('')
@@ -438,12 +454,30 @@ function TransactionsSection({ accounts, categories, transactions, token, onCrea
       <p className="transaction-help">{accounts.length === 0 ? 'Cadastre uma conta antes de adicionar movimentações.' : availableCategories.length === 0 ? 'Cadastre uma categoria do tipo selecionado.' : 'Registre suas movimentações para acompanhar o saldo no dashboard.'}</p>
       <div className="transaction-filter">
         <strong>Histórico</strong>
-        <select value={filter} onChange={(event) => setFilter(event.target.value as 'ALL' | TransactionType)}>
-          <option value="ALL">Todas</option><option value="INCOME">Receitas</option><option value="EXPENSE">Despesas</option>
-        </select>
+        <div className="transaction-filter-controls">
+          <input value={filterDescription} onChange={(event) => setFilterDescription(event.target.value)} placeholder="Buscar descrição" />
+          <select value={filter} onChange={(event) => setFilter(event.target.value as 'ALL' | TransactionType)}>
+            <option value="ALL">Todos os tipos</option><option value="INCOME">Receitas</option><option value="EXPENSE">Despesas</option>
+          </select>
+          <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value as 'ALL' | 'PAID' | 'PENDING')}>
+            <option value="ALL">Todos os status</option><option value="PAID">Pagas</option><option value="PENDING">Pendentes</option>
+          </select>
+          <select value={filterCategoryId} onChange={(event) => setFilterCategoryId(event.target.value)}>
+            <option value="ALL">Todas as categorias</option>
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+          <select value={filterAccountId} onChange={(event) => setFilterAccountId(event.target.value)}>
+            <option value="ALL">Todas as contas</option>
+            {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+          </select>
+          <select value={filterCreditCardId} onChange={(event) => setFilterCreditCardId(event.target.value)}>
+            <option value="ALL">Todos os cartões</option>
+            {creditCards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}
+          </select>
+        </div>
       </div>
       <div className="transaction-history">
-        {transactions.filter((transaction) => filter === 'ALL' || transaction.type === filter).slice(0, 20).map((transaction) => (
+        {filteredTransactions.slice(0, 20).map((transaction) => (
           <div className="transaction-row" key={transaction.id}>
             <div className={`transaction-icon ${transaction.type === 'INCOME' ? 'income' : 'expense'}`}>{transaction.type === 'INCOME' ? '+' : '−'}</div>
             <div className="transaction-description"><strong>{transaction.description}</strong><span>{transaction.categoryName ?? 'Sem categoria'} · {formatDate(transaction.date)}</span></div>
@@ -452,7 +486,9 @@ function TransactionsSection({ accounts, categories, transactions, token, onCrea
             <button className="delete-button" title="Excluir movimentação" onClick={() => remove(transaction)}>Excluir</button>
           </div>
         ))}
-        {transactions.length === 0 && <EmptyState text="Nenhuma movimentação cadastrada." />}
+        {transactions.length === 0
+          ? <EmptyState text="Nenhuma movimentação cadastrada no período." />
+          : filteredTransactions.length === 0 && <EmptyState text="Nenhuma movimentação corresponde aos filtros." />}
       </div>
     </section>
   )
