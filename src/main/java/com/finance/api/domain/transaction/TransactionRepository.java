@@ -4,6 +4,8 @@ import com.finance.api.domain.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.LocalDate;
 import java.util.List;
+import java.math.BigDecimal;
+import com.finance.api.domain.category.Category;
 
 public interface TransactionRepository extends JpaRepository<Transaction, String> {
     List<Transaction> findByUserOrderByDateDesc(User user);
@@ -37,5 +39,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, String
             User user,
             LocalDate startDate,
             LocalDate endDate
+    );
+
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t
+            WHERE t.user = :user
+              AND t.category = :category
+              AND t.type = com.finance.api.domain.transaction.TransactionType.EXPENSE
+              AND t.status = com.finance.api.domain.transaction.TransactionStatus.PAID
+              AND t.date BETWEEN :startDate AND :endDate
+            """)
+    BigDecimal sumPaidExpensesByUserAndCategoryAndDateBetween(
+            User user, Category category, LocalDate startDate, LocalDate endDate
     );
 }

@@ -38,6 +38,18 @@ export interface Invoice {
   dueDate: string
 }
 
+export interface Budget {
+  id: string
+  categoryId: string
+  categoryName: string
+  month: number
+  year: number
+  amount: number
+  spentAmount: number
+  remainingAmount: number
+  percentage: number
+}
+
 export interface Category {
   id: string
   name: string

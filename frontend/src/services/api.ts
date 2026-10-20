@@ -1,4 +1,4 @@
-import type { Account, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionStatus, TransactionType, Transfer } from '../types'
+import type { Account, Budget, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionStatus, TransactionType, Transfer } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL
   ?? `${window.location.protocol}//${window.location.hostname}:8080/api`
@@ -68,6 +68,22 @@ export async function createCreditCard(token: string, card: {
 
 export async function getInvoices(token: string): Promise<Invoice[]> {
   return request<Invoice[]>('/invoices', { headers: auth(token) })
+}
+
+export async function getBudgets(token: string, month?: number, year?: number): Promise<Budget[]> {
+  const params = new URLSearchParams()
+  if (month) params.set('month', String(month))
+  if (year) params.set('year', String(year))
+  const query = params.toString()
+  return request<Budget[]>(`/budgets${query ? `?${query}` : ''}`, { headers: auth(token) })
+}
+
+export async function createBudget(token: string, budget: { categoryId: string; month: number; year: number; amount: number }): Promise<Budget> {
+  return request<Budget>('/budgets', { method: 'POST', headers: auth(token), body: JSON.stringify(budget) })
+}
+
+export async function deleteBudget(token: string, budgetId: string): Promise<void> {
+  await request<void>(`/budgets/${budgetId}`, { method: 'DELETE', headers: auth(token) })
 }
 
 export async function payInvoice(token: string, invoiceId: string, payment: {

@@ -1,13 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { createAccount, createCategory, createCreditCard, createRecurringTransaction, createTransaction, createTransfer, deleteRecurringTransaction, deleteTransaction, deleteTransfer, getAccounts, getCategories, getCreditCards, getDashboard, getInvoices, getRecurringTransactions, getTransactions, getTransfers, login, payInvoice, register, toggleRecurringTransaction, updateTransaction } from './services/api'
-import type { Account, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionType, Transfer } from './types'
+import { createAccount, createBudget, createCategory, createCreditCard, createRecurringTransaction, createTransaction, createTransfer, deleteBudget, deleteRecurringTransaction, deleteTransaction, deleteTransfer, getAccounts, getBudgets, getCategories, getCreditCards, getDashboard, getInvoices, getRecurringTransactions, getTransactions, getTransfers, login, payInvoice, register, toggleRecurringTransaction, updateTransaction } from './services/api'
+import type { Account, Budget, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionType, Transfer } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
-type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring'
+type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring' | 'budgets'
 
 function pageFromHash(): PageKey {
   const value = window.location.hash.replace('#', '') as PageKey
-  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring'].includes(value)
+  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring', 'budgets'].includes(value)
     ? value
     : 'dashboard'
 }
@@ -51,6 +51,7 @@ function App() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([])
+  const [budgets, setBudgets] = useState<Budget[]>([])
 
   useEffect(() => {
     const onHashChange = () => setPage(pageFromHash())
@@ -90,6 +91,9 @@ function App() {
     getRecurringTransactions(token)
       .then(setRecurringTransactions)
       .catch(() => setError('Não foi possível carregar suas transações recorrentes.'))
+    getBudgets(token, Number(startDate.slice(5, 7)), Number(startDate.slice(0, 4)))
+      .then(setBudgets)
+      .catch(() => setError('Não foi possível carregar seus orçamentos.'))
   }, [token, startDate, endDate, refresh])
 
   function handleLogin(newToken: string) {
@@ -120,6 +124,7 @@ function App() {
           <a className={`nav-item ${page === 'invoices' ? 'active' : ''}`} href="#invoices">Faturas</a>
           <a className={`nav-item ${page === 'transfers' ? 'active' : ''}`} href="#transfers">Transferências</a>
           <a className={`nav-item ${page === 'recurring' ? 'active' : ''}`} href="#recurring">Recorrências</a>
+          <a className={`nav-item ${page === 'budgets' ? 'active' : ''}`} href="#budgets">Orçamentos</a>
         </nav>
         <button className="logout-button" onClick={() => {
           localStorage.removeItem(TOKEN_KEY)
@@ -130,7 +135,7 @@ function App() {
       <main className="content">
         <header className="page-header">
           <div>
-            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : 'Recorrências'}</p>
+            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : page === 'recurring' ? 'Recorrências' : 'Orçamentos'}</p>
             <h1>{page === 'dashboard' ? 'Seu dinheiro, sob controle.' : 'Organize sua vida financeira.'}</h1>
           </div>
           <div className="period-selector">
@@ -141,7 +146,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard page={page} summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} token={token} onNavigate={navigate} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard page={page} summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} budgets={budgets} token={token} onNavigate={navigate} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} onBudgetsChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -209,7 +214,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ page, summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, token, onNavigate, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged }: {
+function Dashboard({ page, summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, budgets, token, onNavigate, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged, onBudgetsChanged }: {
   page: PageKey
   summary: DashboardSummary
   accounts: Account[]
@@ -219,6 +224,7 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
   transactions: Transaction[]
   transfers: Transfer[]
   recurringTransactions: RecurringTransaction[]
+  budgets: Budget[]
   token: string
   onNavigate: (page: PageKey) => void
   onAccountCreated: (account: Account) => void
@@ -229,6 +235,7 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
   onTransfersChanged: () => void
   onInvoicesChanged: () => void
   onRecurringChanged: () => void
+  onBudgetsChanged: () => void
 }) {
   const refreshTransactions = () => onTransactionsChanged()
 
@@ -263,6 +270,7 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
       {page === 'cards' && <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />}
       {page === 'invoices' && <InvoicesSection invoices={invoices} accounts={accounts} token={token} onChanged={onInvoicesChanged} />}
       {page === 'recurring' && <RecurringTransactionsSection recurringTransactions={recurringTransactions} accounts={accounts} categories={categories} creditCards={creditCards} token={token} onChanged={onRecurringChanged} />}
+      {page === 'budgets' && <BudgetsSection budgets={budgets} categories={categories} token={token} onChanged={onBudgetsChanged} />}
       {page === 'transactions' && <TransactionsSection accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={refreshTransactions} />}
     </div>
   )
@@ -670,6 +678,75 @@ function InvoicesSection({ invoices, accounts, token, onChanged }: {
             <button type="button" className="text-button" onClick={() => setPaymentInvoiceId(null)}>Cancelar</button>
             {error && <div className="alert error">{error}</div>}
           </form>}
+        </article>)}
+      </div>}
+    </section>
+  )
+}
+
+function BudgetsSection({ budgets, categories, token, onChanged }: {
+  budgets: Budget[]
+  categories: Category[]
+  token: string
+  onChanged: () => void
+}) {
+  const today = new Date()
+  const [open, setOpen] = useState(false)
+  const [categoryId, setCategoryId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [month, setMonth] = useState(String(today.getMonth() + 1))
+  const [year, setYear] = useState(String(today.getFullYear()))
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const expenseCategories = categories.filter((category) => category.type === 'EXPENSE')
+  const monthName = (value: number) => new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(2024, value - 1, 1))
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      await createBudget(token, { categoryId, month: Number(month), year: Number(year), amount: Number(amount) })
+      setOpen(false)
+      setCategoryId('')
+      setAmount('')
+      onChanged()
+    } catch (budgetError) {
+      setError(budgetError instanceof Error ? budgetError.message : 'Não foi possível salvar o orçamento.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function remove(id: string) {
+    if (!window.confirm('Excluir este orçamento?')) return
+    try {
+      await deleteBudget(token, id)
+      onChanged()
+    } catch (budgetError) {
+      setError(budgetError instanceof Error ? budgetError.message : 'Não foi possível excluir o orçamento.')
+    }
+  }
+
+  return (
+    <section className="card budgets-card">
+      <div className="card-heading">
+        <div><p className="eyebrow">Planejamento</p><h2>Orçamentos por categoria</h2></div>
+        <button className="primary-small-button" onClick={() => setOpen((current) => !current)}>{open ? 'Cancelar' : 'Novo orçamento'}</button>
+      </div>
+      {open && <form className="card-form" onSubmit={submit}>
+        <label>Categoria<select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Selecione</option>{expenseCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        <label>Mês<select value={month} onChange={(event) => setMonth(event.target.value)}>{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{monthName(index + 1)}</option>)}</select></label>
+        <label>Ano<input required min="2000" type="number" value={year} onChange={(event) => setYear(event.target.value)} /></label>
+        <label>Limite<input required min="0.01" step="0.01" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+        {error && <div className="alert error">{error}</div>}
+        <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar orçamento'}</button>
+      </form>}
+      {budgets.length === 0 ? <EmptyState text="Nenhum orçamento definido para este mês." /> : <div className="budget-list">
+        {budgets.map((budget) => <article className="budget-row" key={budget.id}>
+          <div className="budget-heading"><strong>{budget.categoryName}</strong><span>{formatCurrency(budget.spentAmount)} de {formatCurrency(budget.amount)}</span></div>
+          <div className="bar-track"><div className={`bar-fill ${budget.percentage > 100 ? 'budget-over' : ''}`} style={{ width: `${Math.min(budget.percentage, 100)}%` }} /></div>
+          <div className="budget-footer"><span>{budget.percentage.toFixed(1)}% utilizado</span><button className="delete-button" onClick={() => remove(budget.id)}>Excluir</button></div>
         </article>)}
       </div>}
     </section>
