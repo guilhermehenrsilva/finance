@@ -3,6 +3,14 @@ import { createAccount, createCategory, createCreditCard, createRecurringTransac
 import type { Account, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionType, Transfer } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
+type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring'
+
+function pageFromHash(): PageKey {
+  const value = window.location.hash.replace('#', '') as PageKey
+  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring'].includes(value)
+    ? value
+    : 'dashboard'
+}
 
 function currentMonthRange() {
   const now = new Date()
@@ -28,6 +36,7 @@ function formatDate(value: string) {
 
 function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY))
+  const [page, setPage] = useState<PageKey>(pageFromHash)
   const range = useMemo(currentMonthRange, [])
   const [startDate, setStartDate] = useState(range.start)
   const [endDate, setEndDate] = useState(range.end)
@@ -42,6 +51,12 @@ function App() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([])
+
+  useEffect(() => {
+    const onHashChange = () => setPage(pageFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   useEffect(() => {
     if (!token) return
@@ -83,6 +98,11 @@ function App() {
     setError('')
   }
 
+  function navigate(nextPage: PageKey) {
+    window.location.hash = nextPage
+    setPage(nextPage)
+  }
+
   if (!token) {
     return <LoginScreen onLogin={handleLogin} />
   }
@@ -92,11 +112,14 @@ function App() {
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">$</span><span>Finance</span></div>
         <nav>
-          <a className="nav-item active" href="#dashboard">Visão geral</a>
-          <a className="nav-item" href="#transactions">Movimentações</a>
-          <a className="nav-item" href="#accounts">Contas</a>
-          <a className="nav-item" href="#cards">Cartões</a>
-          <a className="nav-item" href="#recurring">Recorrências</a>
+          <a className={`nav-item ${page === 'dashboard' ? 'active' : ''}`} href="#dashboard">Visão geral</a>
+          <a className={`nav-item ${page === 'transactions' ? 'active' : ''}`} href="#transactions">Movimentações</a>
+          <a className={`nav-item ${page === 'accounts' ? 'active' : ''}`} href="#accounts">Contas</a>
+          <a className={`nav-item ${page === 'categories' ? 'active' : ''}`} href="#categories">Categorias</a>
+          <a className={`nav-item ${page === 'cards' ? 'active' : ''}`} href="#cards">Cartões</a>
+          <a className={`nav-item ${page === 'invoices' ? 'active' : ''}`} href="#invoices">Faturas</a>
+          <a className={`nav-item ${page === 'transfers' ? 'active' : ''}`} href="#transfers">Transferências</a>
+          <a className={`nav-item ${page === 'recurring' ? 'active' : ''}`} href="#recurring">Recorrências</a>
         </nav>
         <button className="logout-button" onClick={() => {
           localStorage.removeItem(TOKEN_KEY)
@@ -107,8 +130,8 @@ function App() {
       <main className="content">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Visão geral</p>
-            <h1>Seu dinheiro, sob controle.</h1>
+            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : 'Recorrências'}</p>
+            <h1>{page === 'dashboard' ? 'Seu dinheiro, sob controle.' : 'Organize sua vida financeira.'}</h1>
           </div>
           <div className="period-selector">
             <label>De <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
@@ -118,7 +141,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} token={token} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard page={page} summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} token={token} onNavigate={navigate} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -186,7 +209,8 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, token, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged }: {
+function Dashboard({ page, summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, token, onNavigate, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged }: {
+  page: PageKey
   summary: DashboardSummary
   accounts: Account[]
   categories: Category[]
@@ -196,6 +220,7 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
   transfers: Transfer[]
   recurringTransactions: RecurringTransaction[]
   token: string
+  onNavigate: (page: PageKey) => void
   onAccountCreated: (account: Account) => void
   onCategoryCreated: (category: Category) => void
   onCreditCardCreated: (card: CreditCard) => void
@@ -205,15 +230,17 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
   onInvoicesChanged: () => void
   onRecurringChanged: () => void
 }) {
+  const refreshTransactions = () => onTransactionsChanged()
+
   return (
     <div className="dashboard">
-      <section className="metrics-grid">
+      {page === 'dashboard' && <section className="metrics-grid">
         <MetricCard label="Saldo total" value={formatCurrency(summary.totalBalance)} tone="blue" />
         <MetricCard label="Receitas no período" value={formatCurrency(summary.periodIncome)} tone="green" />
         <MetricCard label="Despesas no período" value={formatCurrency(summary.periodExpense)} tone="red" />
         <MetricCard label="Resultado" value={formatCurrency(summary.periodResult)} tone={summary.periodResult >= 0 ? 'green' : 'red'} />
-      </section>
-      <section className="dashboard-grid">
+      </section>}
+      {page === 'dashboard' && <section className="dashboard-grid">
         <article className="card category-card">
           <div className="card-heading"><div><p className="eyebrow">Distribuição</p><h2>Despesas por categoria</h2></div></div>
           {summary.expensesByCategory.length === 0 ? <EmptyState text="Nenhuma despesa paga no período." /> : <CategoryBars categories={summary.expensesByCategory} />}
@@ -224,18 +251,19 @@ function Dashboard({ summary, accounts, categories, creditCards, invoices, trans
           <div className="pending-row"><span>Contas a pagar</span><strong className="negative">{formatCurrency(summary.pendingExpense)}</strong></div>
           <div className="pending-tip">Mantenha suas contas em dia para ter uma visão fiel do seu saldo.</div>
         </article>
-      </section>
-      <section className="card transactions-card" id="transactions">
+      </section>}
+      {page === 'dashboard' && <section className="card transactions-card" id="transactions">
         <div className="card-heading"><div><p className="eyebrow">Atividade</p><h2>Últimas movimentações</h2></div><button className="text-button">Ver todas</button></div>
         {summary.recentTransactions.length === 0 ? <EmptyState text="Nenhuma movimentação encontrada." /> : <TransactionList transactions={summary.recentTransactions} />}
-      </section>
-      <AccountsSection accounts={accounts} token={token} onAccountCreated={onAccountCreated} />
-      <TransfersSection accounts={accounts} transfers={transfers} token={token} onChanged={onTransfersChanged} />
-      <CategoriesSection categories={categories} token={token} onCategoryCreated={onCategoryCreated} />
-      <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />
-      <InvoicesSection invoices={invoices} accounts={accounts} token={token} onChanged={onInvoicesChanged} />
-      <RecurringTransactionsSection recurringTransactions={recurringTransactions} accounts={accounts} categories={categories} creditCards={creditCards} token={token} onChanged={onRecurringChanged} />
-      <TransactionsSection accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={onTransactionsChanged} />
+        <button className="primary-small-button page-action" onClick={() => onNavigate('transactions')}>Ver todas as movimentações</button>
+      </section>}
+      {page === 'accounts' && <AccountsSection accounts={accounts} token={token} onAccountCreated={onAccountCreated} />}
+      {page === 'transfers' && <TransfersSection accounts={accounts} transfers={transfers} token={token} onChanged={onTransfersChanged} />}
+      {page === 'categories' && <CategoriesSection categories={categories} token={token} onCategoryCreated={onCategoryCreated} />}
+      {page === 'cards' && <CreditCardsSection cards={creditCards} accounts={accounts} token={token} onCreated={onCreditCardCreated} />}
+      {page === 'invoices' && <InvoicesSection invoices={invoices} accounts={accounts} token={token} onChanged={onInvoicesChanged} />}
+      {page === 'recurring' && <RecurringTransactionsSection recurringTransactions={recurringTransactions} accounts={accounts} categories={categories} creditCards={creditCards} token={token} onChanged={onRecurringChanged} />}
+      {page === 'transactions' && <TransactionsSection accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={refreshTransactions} />}
     </div>
   )
 }
