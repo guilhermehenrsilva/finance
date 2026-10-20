@@ -3,11 +3,11 @@ import { contributeToGoal, createAccount, createBudget, createCategory, createCr
 import type { Account, Budget, Category, CreditCard, DashboardSummary, FinancialGoal, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionType, Transfer } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
-type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring' | 'budgets' | 'goals'
+type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring' | 'budgets' | 'goals' | 'reports'
 
 function pageFromHash(): PageKey {
   const value = window.location.hash.replace('#', '') as PageKey
-  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring', 'budgets', 'goals'].includes(value)
+  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring', 'budgets', 'goals', 'reports'].includes(value)
     ? value
     : 'dashboard'
 }
@@ -130,6 +130,7 @@ function App() {
           <a className={`nav-item ${page === 'recurring' ? 'active' : ''}`} href="#recurring">Recorrências</a>
           <a className={`nav-item ${page === 'budgets' ? 'active' : ''}`} href="#budgets">Orçamentos</a>
           <a className={`nav-item ${page === 'goals' ? 'active' : ''}`} href="#goals">Metas</a>
+          <a className={`nav-item ${page === 'reports' ? 'active' : ''}`} href="#reports">Relatórios</a>
         </nav>
         <button className="logout-button" onClick={() => {
           localStorage.removeItem(TOKEN_KEY)
@@ -140,7 +141,7 @@ function App() {
       <main className="content">
         <header className="page-header">
           <div>
-            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : page === 'recurring' ? 'Recorrências' : page === 'budgets' ? 'Orçamentos' : 'Metas'}</p>
+            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : page === 'recurring' ? 'Recorrências' : page === 'budgets' ? 'Orçamentos' : page === 'goals' ? 'Metas' : 'Relatórios'}</p>
             <h1>{page === 'dashboard' ? 'Seu dinheiro, sob controle.' : 'Organize sua vida financeira.'}</h1>
           </div>
           <div className="period-selector">
@@ -279,6 +280,7 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
       {page === 'recurring' && <RecurringTransactionsSection recurringTransactions={recurringTransactions} accounts={accounts} categories={categories} creditCards={creditCards} token={token} onChanged={onRecurringChanged} />}
       {page === 'budgets' && <BudgetsSection budgets={budgets} categories={categories} token={token} onChanged={onBudgetsChanged} />}
       {page === 'goals' && <GoalsSection goals={goals} token={token} onChanged={onGoalsChanged} />}
+      {page === 'reports' && <ReportsSection summary={summary} />}
       {page === 'transactions' && <TransactionsSection accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={refreshTransactions} />}
     </div>
   )
@@ -758,6 +760,42 @@ function BudgetsSection({ budgets, categories, token, onChanged }: {
         </article>)}
       </div>}
     </section>
+  )
+}
+
+function ReportsSection({ summary }: { summary: DashboardSummary }) {
+  const income = summary.periodIncome
+  const expense = summary.periodExpense
+  const total = income + expense
+  const incomeWidth = total === 0 ? 0 : (income / total) * 100
+  const expenseWidth = total === 0 ? 0 : (expense / total) * 100
+
+  return (
+    <div className="reports-page">
+      <section className="metrics-grid">
+        <MetricCard label="Receitas no período" value={formatCurrency(income)} tone="green" />
+        <MetricCard label="Despesas no período" value={formatCurrency(expense)} tone="red" />
+        <MetricCard label="Resultado" value={formatCurrency(summary.periodResult)} tone={summary.periodResult >= 0 ? 'green' : 'red'} />
+        <MetricCard label="Despesas em aberto" value={formatCurrency(summary.pendingExpense)} tone="blue" />
+      </section>
+      <section className="dashboard-grid report-grid">
+        <article className="card">
+          <div className="card-heading"><div><p className="eyebrow">Fluxo financeiro</p><h2>Receitas x despesas</h2></div></div>
+          {total === 0 ? <EmptyState text="Nenhuma movimentação paga no período." /> : <div className="flow-chart">
+            <div className="flow-track"><span className="flow-income" style={{ width: `${incomeWidth}%` }} /><span className="flow-expense" style={{ width: `${expenseWidth}%` }} /></div>
+            <div className="flow-legend"><span><i className="legend-dot income-dot" />Receitas {incomeWidth.toFixed(1)}%</span><span><i className="legend-dot expense-dot" />Despesas {expenseWidth.toFixed(1)}%</span></div>
+          </div>}
+        </article>
+        <article className="card">
+          <div className="card-heading"><div><p className="eyebrow">Despesas pagas</p><h2>Por categoria</h2></div></div>
+          {summary.expensesByCategory.length === 0 ? <EmptyState text="Nenhuma despesa paga no período." /> : <CategoryBars categories={summary.expensesByCategory} />}
+        </article>
+      </section>
+      <section className="card transactions-card">
+        <div className="card-heading"><div><p className="eyebrow">Detalhamento</p><h2>Movimentações recentes</h2></div></div>
+        {summary.recentTransactions.length === 0 ? <EmptyState text="Nenhuma movimentação no período." /> : <TransactionList transactions={summary.recentTransactions} />}
+      </section>
+    </div>
   )
 }
 
