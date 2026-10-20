@@ -45,11 +45,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, String
             SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t
             WHERE t.user = :user
               AND t.category = :category
-              AND t.type = com.finance.api.domain.transaction.TransactionType.EXPENSE
-              AND t.status = com.finance.api.domain.transaction.TransactionStatus.PAID
+              AND t.type = :type
+              AND t.status = :status
               AND t.date BETWEEN :startDate AND :endDate
             """)
     BigDecimal sumPaidExpensesByUserAndCategoryAndDateBetween(
-            User user, Category category, LocalDate startDate, LocalDate endDate
+            User user, Category category, LocalDate startDate, LocalDate endDate,
+            TransactionType type, TransactionStatus status
     );
 }

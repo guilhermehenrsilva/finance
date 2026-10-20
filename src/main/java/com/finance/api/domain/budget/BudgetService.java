@@ -82,7 +82,9 @@ public class BudgetService {
         LocalDate start = LocalDate.of(budget.getYear(), budget.getMonth(), 1);
         LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
         BigDecimal spent = transactionRepository.sumPaidExpensesByUserAndCategoryAndDateBetween(
-                budget.getUser(), budget.getCategory(), start, end);
+                budget.getUser(), budget.getCategory(), start, end,
+                com.finance.api.domain.transaction.TransactionType.EXPENSE,
+                com.finance.api.domain.transaction.TransactionStatus.PAID);
         return new BudgetResponseDTO(budget, spent == null ? BigDecimal.ZERO : spent);
     }
 }
