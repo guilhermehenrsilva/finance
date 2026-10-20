@@ -97,6 +97,7 @@ export async function createTransaction(token: string, transaction: {
   date: string
   categoryId: string
   accountId: string
+  creditCardId?: string
   totalInstallments: number
 }): Promise<Transaction> {
   return request<Transaction>('/transactions', { method: 'POST', headers: auth(token), body: JSON.stringify(transaction) })

@@ -367,10 +367,17 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
+  const [creditCardId, setCreditCardId] = useState('')
   const [installments, setInstallments] = useState('1')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<'ALL' | TransactionType>('ALL')
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL')
+  const [filterCategoryId, setFilterCategoryId] = useState('ALL')
+  const [filterAccountId, setFilterAccountId] = useState('ALL')
+  const [filterCreditCardId, setFilterCreditCardId] = useState('ALL')
+  const [filterDescription, setFilterDescription] = useState('')
   const availableCategories = categories.filter((category) => category.type === type)
   const filteredTransactions = transactions.filter((transaction) => {
     const typeMatches = filter === 'ALL' || transaction.type === filter
@@ -382,13 +389,6 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
     const descriptionMatches = !filterDescription.trim() || transaction.description.toLowerCase().includes(filterDescription.trim().toLowerCase())
     return typeMatches && statusMatches && categoryMatches && accountMatches && cardMatches && descriptionMatches
   })
-  const [filter, setFilter] = useState<'ALL' | TransactionType>('ALL')
-  const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL')
-  const [filterCategoryId, setFilterCategoryId] = useState('ALL')
-  const [filterAccountId, setFilterAccountId] = useState('ALL')
-  const [filterCreditCardId, setFilterCreditCardId] = useState('ALL')
-  const [filterDescription, setFilterDescription] = useState('')
-
   function resetForm() {
     setDescription('')
     setAmount('')
@@ -397,6 +397,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
     setDate(new Date().toISOString().slice(0, 10))
     setCategoryId('')
     setAccountId('')
+    setCreditCardId('')
     setInstallments('1')
     setEditingId(null)
   }
@@ -406,6 +407,11 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
     setSaving(true)
     setError('')
     try {
+      if ((accountId && creditCardId) || (!accountId && !creditCardId)) {
+        setError('Selecione uma conta ou um cartão de crédito.')
+        setSaving(false)
+        return
+      }
       const payload = {
         description,
         amount: Number(amount),
@@ -414,6 +420,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
         date,
         categoryId,
         accountId,
+        ...(creditCardId ? { creditCardId } : {}),
         totalInstallments: Number(installments),
       }
       if (editingId) {
@@ -425,8 +432,12 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
       setOpen(false)
       if (editingId) onChanged()
       else onCreated()
-    } catch {
-      setError(editingId ? 'Não foi possível editar a movimentação. Confira conta e categoria.' : 'Não foi possível cadastrar a movimentação. Confira conta e categoria.')
+    } catch (transactionError) {
+      setError(transactionError instanceof Error
+        ? transactionError.message
+        : editingId
+          ? 'Não foi possível editar a movimentação. Confira conta e categoria.'
+          : 'Não foi possível cadastrar a movimentação. Confira conta e categoria.')
     } finally {
       setSaving(false)
     }
@@ -456,6 +467,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
     setDate(transaction.date)
     setCategoryId(transaction.categoryId)
     setAccountId(transaction.accountId)
+    setCreditCardId('')
     setInstallments('1')
     setError('')
     setOpen(true)
@@ -470,11 +482,12 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
       {open && <form className="transaction-form" onSubmit={submit}>
         <label>Descrição<input required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex.: Supermercado" /></label>
         <label>Valor<input required min="0.01" step="0.01" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
-        <label>Tipo<select value={type} onChange={(event) => { setType(event.target.value as TransactionType); setCategoryId('') }}><option value="EXPENSE">Despesa</option><option value="INCOME">Receita</option></select></label>
+        <label>Tipo<select value={type} onChange={(event) => { const nextType = event.target.value as TransactionType; setType(nextType); setCategoryId(''); if (nextType === 'INCOME') setCreditCardId('') }}><option value="EXPENSE">Despesa</option><option value="INCOME">Receita</option></select></label>
         <label>Status<select value={status} onChange={(event) => setStatus(event.target.value as 'PAID' | 'PENDING')}><option value="PAID">Pago</option><option value="PENDING">Pendente</option></select></label>
         <label>Data<input required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
         <label>Categoria<select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Selecione</option>{availableCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-        <label>Conta<select required value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Selecione</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        <label>Conta<select value={accountId} onChange={(event) => { setAccountId(event.target.value); setCreditCardId('') }}><option value="">Nenhuma</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        {type === 'EXPENSE' && <label>Cartão<select value={creditCardId} onChange={(event) => { setCreditCardId(event.target.value); setAccountId('') }}><option value="">Nenhum</option>{creditCards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select></label>}
         <label>Parcelas<input disabled={Boolean(editingId)} min="1" max="60" type="number" value={installments} onChange={(event) => setInstallments(event.target.value)} /></label>
         {error && <div className="alert error">{error}</div>}
         <button className="primary-button" disabled={saving || accounts.length === 0 || availableCategories.length === 0}>{saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Salvar movimentação'}</button>
@@ -510,7 +523,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
             <div className={`transaction-icon ${transaction.type === 'INCOME' ? 'income' : 'expense'}`}>{transaction.type === 'INCOME' ? '+' : '−'}</div>
             <div className="transaction-description"><strong>{transaction.description}</strong><span>{transaction.categoryName ?? 'Sem categoria'} · {formatDate(transaction.date)}</span></div>
             <strong className={transaction.type === 'INCOME' ? 'positive' : 'negative'}>{formatCurrency(transaction.amount)}</strong>
-            <button className="edit-button" title="Editar movimentação" onClick={() => edit(transaction)}>Editar</button>
+            <button className="edit-button" title={transaction.creditCardName ? 'Compras no cartão não podem ser editadas' : 'Editar movimentação'} onClick={() => edit(transaction)}>Editar</button>
             <button className="delete-button" title="Excluir movimentação" onClick={() => remove(transaction)}>Excluir</button>
           </div>
         ))}
