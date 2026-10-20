@@ -50,6 +50,17 @@ export interface Budget {
   percentage: number
 }
 
+export interface FinancialGoal {
+  id: string
+  name: string
+  targetAmount: number
+  currentAmount: number
+  remainingAmount: number
+  percentage: number
+  deadline: string | null
+  completed: boolean
+}
+
 export interface Category {
   id: string
   name: string

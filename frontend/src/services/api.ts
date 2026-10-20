@@ -1,4 +1,4 @@
-import type { Account, Budget, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionStatus, TransactionType, Transfer } from '../types'
+import type { Account, Budget, Category, CreditCard, DashboardSummary, FinancialGoal, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionStatus, TransactionType, Transfer } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL
   ?? `${window.location.protocol}//${window.location.hostname}:8080/api`
@@ -84,6 +84,26 @@ export async function createBudget(token: string, budget: { categoryId: string; 
 
 export async function deleteBudget(token: string, budgetId: string): Promise<void> {
   await request<void>(`/budgets/${budgetId}`, { method: 'DELETE', headers: auth(token) })
+}
+
+export async function getGoals(token: string): Promise<FinancialGoal[]> {
+  return request<FinancialGoal[]>('/goals', { headers: auth(token) })
+}
+
+export async function createGoal(token: string, goal: { name: string; targetAmount: number; deadline?: string }): Promise<FinancialGoal> {
+  return request<FinancialGoal>('/goals', { method: 'POST', headers: auth(token), body: JSON.stringify(goal) })
+}
+
+export async function contributeToGoal(token: string, goalId: string, amount: number): Promise<FinancialGoal> {
+  return request<FinancialGoal>(`/goals/${goalId}/contributions`, {
+    method: 'POST',
+    headers: auth(token),
+    body: JSON.stringify({ amount }),
+  })
+}
+
+export async function deleteGoal(token: string, goalId: string): Promise<void> {
+  await request<void>(`/goals/${goalId}`, { method: 'DELETE', headers: auth(token) })
 }
 
 export async function payInvoice(token: string, invoiceId: string, payment: {

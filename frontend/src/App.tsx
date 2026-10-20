@@ -1,13 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { createAccount, createBudget, createCategory, createCreditCard, createRecurringTransaction, createTransaction, createTransfer, deleteBudget, deleteRecurringTransaction, deleteTransaction, deleteTransfer, getAccounts, getBudgets, getCategories, getCreditCards, getDashboard, getInvoices, getRecurringTransactions, getTransactions, getTransfers, login, payInvoice, register, toggleRecurringTransaction, updateTransaction } from './services/api'
-import type { Account, Budget, Category, CreditCard, DashboardSummary, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionType, Transfer } from './types'
+import { contributeToGoal, createAccount, createBudget, createCategory, createCreditCard, createGoal, createRecurringTransaction, createTransaction, createTransfer, deleteBudget, deleteGoal, deleteRecurringTransaction, deleteTransaction, deleteTransfer, getAccounts, getBudgets, getCategories, getCreditCards, getDashboard, getGoals, getInvoices, getRecurringTransactions, getTransactions, getTransfers, login, payInvoice, register, toggleRecurringTransaction, updateTransaction } from './services/api'
+import type { Account, Budget, Category, CreditCard, DashboardSummary, FinancialGoal, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionType, Transfer } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
-type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring' | 'budgets'
+type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring' | 'budgets' | 'goals'
 
 function pageFromHash(): PageKey {
   const value = window.location.hash.replace('#', '') as PageKey
-  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring', 'budgets'].includes(value)
+  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring', 'budgets', 'goals'].includes(value)
     ? value
     : 'dashboard'
 }
@@ -52,6 +52,7 @@ function App() {
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([])
   const [budgets, setBudgets] = useState<Budget[]>([])
+  const [goals, setGoals] = useState<FinancialGoal[]>([])
 
   useEffect(() => {
     const onHashChange = () => setPage(pageFromHash())
@@ -94,6 +95,9 @@ function App() {
     getBudgets(token, Number(startDate.slice(5, 7)), Number(startDate.slice(0, 4)))
       .then(setBudgets)
       .catch(() => setError('Não foi possível carregar seus orçamentos.'))
+    getGoals(token)
+      .then(setGoals)
+      .catch(() => setError('Não foi possível carregar suas metas.'))
   }, [token, startDate, endDate, refresh])
 
   function handleLogin(newToken: string) {
@@ -125,6 +129,7 @@ function App() {
           <a className={`nav-item ${page === 'transfers' ? 'active' : ''}`} href="#transfers">Transferências</a>
           <a className={`nav-item ${page === 'recurring' ? 'active' : ''}`} href="#recurring">Recorrências</a>
           <a className={`nav-item ${page === 'budgets' ? 'active' : ''}`} href="#budgets">Orçamentos</a>
+          <a className={`nav-item ${page === 'goals' ? 'active' : ''}`} href="#goals">Metas</a>
         </nav>
         <button className="logout-button" onClick={() => {
           localStorage.removeItem(TOKEN_KEY)
@@ -135,7 +140,7 @@ function App() {
       <main className="content">
         <header className="page-header">
           <div>
-            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : page === 'recurring' ? 'Recorrências' : 'Orçamentos'}</p>
+            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : page === 'recurring' ? 'Recorrências' : page === 'budgets' ? 'Orçamentos' : 'Metas'}</p>
             <h1>{page === 'dashboard' ? 'Seu dinheiro, sob controle.' : 'Organize sua vida financeira.'}</h1>
           </div>
           <div className="period-selector">
@@ -146,7 +151,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard page={page} summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} budgets={budgets} token={token} onNavigate={navigate} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} onBudgetsChanged={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard page={page} summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} budgets={budgets} goals={goals} token={token} onNavigate={navigate} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} onBudgetsChanged={() => setRefresh((current) => current + 1)} onGoalsChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -214,7 +219,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ page, summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, budgets, token, onNavigate, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged, onBudgetsChanged }: {
+function Dashboard({ page, summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, budgets, goals, token, onNavigate, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged, onBudgetsChanged, onGoalsChanged }: {
   page: PageKey
   summary: DashboardSummary
   accounts: Account[]
@@ -225,6 +230,7 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
   transfers: Transfer[]
   recurringTransactions: RecurringTransaction[]
   budgets: Budget[]
+  goals: FinancialGoal[]
   token: string
   onNavigate: (page: PageKey) => void
   onAccountCreated: (account: Account) => void
@@ -236,6 +242,7 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
   onInvoicesChanged: () => void
   onRecurringChanged: () => void
   onBudgetsChanged: () => void
+  onGoalsChanged: () => void
 }) {
   const refreshTransactions = () => onTransactionsChanged()
 
@@ -271,6 +278,7 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
       {page === 'invoices' && <InvoicesSection invoices={invoices} accounts={accounts} token={token} onChanged={onInvoicesChanged} />}
       {page === 'recurring' && <RecurringTransactionsSection recurringTransactions={recurringTransactions} accounts={accounts} categories={categories} creditCards={creditCards} token={token} onChanged={onRecurringChanged} />}
       {page === 'budgets' && <BudgetsSection budgets={budgets} categories={categories} token={token} onChanged={onBudgetsChanged} />}
+      {page === 'goals' && <GoalsSection goals={goals} token={token} onChanged={onGoalsChanged} />}
       {page === 'transactions' && <TransactionsSection accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={refreshTransactions} />}
     </div>
   )
@@ -749,6 +757,99 @@ function BudgetsSection({ budgets, categories, token, onChanged }: {
           <div className="budget-footer"><span>{budget.percentage.toFixed(1)}% utilizado</span><button className="delete-button" onClick={() => remove(budget.id)}>Excluir</button></div>
         </article>)}
       </div>}
+    </section>
+  )
+}
+
+function GoalsSection({ goals, token, onChanged }: {
+  goals: FinancialGoal[]
+  token: string
+  onChanged: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [targetAmount, setTargetAmount] = useState('')
+  const [deadline, setDeadline] = useState('')
+  const [contributionGoalId, setContributionGoalId] = useState<string | null>(null)
+  const [contribution, setContribution] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      await createGoal(token, { name, targetAmount: Number(targetAmount), ...(deadline ? { deadline } : {}) })
+      setName('')
+      setTargetAmount('')
+      setDeadline('')
+      setOpen(false)
+      onChanged()
+    } catch (goalError) {
+      setError(goalError instanceof Error ? goalError.message : 'Não foi possível criar a meta.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function addContribution(event: FormEvent) {
+    event.preventDefault()
+    if (!contributionGoalId) return
+    setSaving(true)
+    setError('')
+    try {
+      await contributeToGoal(token, contributionGoalId, Number(contribution))
+      setContribution('')
+      setContributionGoalId(null)
+      onChanged()
+    } catch (goalError) {
+      setError(goalError instanceof Error ? goalError.message : 'Não foi possível adicionar a contribuição.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function remove(id: string) {
+    if (!window.confirm('Excluir esta meta?')) return
+    try {
+      await deleteGoal(token, id)
+      onChanged()
+    } catch (goalError) {
+      setError(goalError instanceof Error ? goalError.message : 'Não foi possível excluir a meta.')
+    }
+  }
+
+  return (
+    <section className="card goals-card">
+      <div className="card-heading">
+        <div><p className="eyebrow">Planejamento</p><h2>Metas financeiras</h2></div>
+        <button className="primary-small-button" onClick={() => setOpen((current) => !current)}>{open ? 'Cancelar' : 'Nova meta'}</button>
+      </div>
+      {open && <form className="card-form" onSubmit={submit}>
+        <label>Nome<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Reserva de emergência" /></label>
+        <label>Valor-alvo<input required min="0.01" step="0.01" type="number" value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} /></label>
+        <label>Prazo<input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
+        {error && <div className="alert error">{error}</div>}
+        <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar meta'}</button>
+      </form>}
+      {goals.length === 0 ? <EmptyState text="Nenhuma meta cadastrada." /> : <div className="goal-list">
+        {goals.map((goal) => <article className="goal-row" key={goal.id}>
+          <div className="goal-heading"><strong>{goal.name}</strong><span>{goal.deadline ? `Prazo: ${formatDate(goal.deadline)}` : 'Sem prazo'}</span></div>
+          <div className="goal-amounts"><span>{formatCurrency(goal.currentAmount)} de {formatCurrency(goal.targetAmount)}</span><strong>{goal.percentage.toFixed(1)}%</strong></div>
+          <div className="bar-track"><div className={`bar-fill ${goal.completed ? 'goal-complete' : ''}`} style={{ width: `${Math.min(goal.percentage, 100)}%` }} /></div>
+          <div className="goal-footer">
+            <span>{goal.completed ? 'Meta concluída' : `Faltam ${formatCurrency(goal.remainingAmount)}`}</span>
+            <div><button className="primary-small-button" disabled={goal.completed} onClick={() => { setContributionGoalId(goal.id); setError('') }}>Adicionar valor</button> <button className="delete-button" onClick={() => remove(goal.id)}>Excluir</button></div>
+          </div>
+          {contributionGoalId === goal.id && <form className="goal-contribution-form" onSubmit={addContribution}>
+            <label>Valor<input required min="0.01" step="0.01" type="number" value={contribution} onChange={(event) => setContribution(event.target.value)} /></label>
+            <button className="primary-small-button" disabled={saving}>{saving ? 'Salvando...' : 'Confirmar'}</button>
+            <button type="button" className="text-button" onClick={() => setContributionGoalId(null)}>Cancelar</button>
+          </form>}
+        </article>)}
+      </div>}
+      {error && !open && <div className="alert error">{error}</div>}
     </section>
   )
 }
