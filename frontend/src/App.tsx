@@ -770,6 +770,42 @@ function ReportsSection({ summary }: { summary: DashboardSummary }) {
   const incomeWidth = total === 0 ? 0 : (income / total) * 100
   const expenseWidth = total === 0 ? 0 : (expense / total) * 100
 
+  function exportCsv() {
+    const rows = [
+      ['Relatório financeiro'],
+      ['Período', summary.startDate, summary.endDate],
+      [],
+      ['Indicador', 'Valor'],
+      ['Receitas', income.toFixed(2)],
+      ['Despesas', expense.toFixed(2)],
+      ['Resultado', summary.periodResult.toFixed(2)],
+      ['Despesas pendentes', summary.pendingExpense.toFixed(2)],
+      [],
+      ['Despesas por categoria'],
+      ['Categoria', 'Valor'],
+      ...summary.expensesByCategory.map((category) => [category.categoryName, category.amount.toFixed(2)]),
+      [],
+      ['Movimentações recentes'],
+      ['Descrição', 'Tipo', 'Status', 'Data', 'Categoria', 'Valor'],
+      ...summary.recentTransactions.map((transaction) => [
+        transaction.description,
+        transaction.type,
+        transaction.status,
+        transaction.date,
+        transaction.categoryName ?? 'Sem categoria',
+        transaction.amount.toFixed(2),
+      ]),
+    ]
+    const escapeCell = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`
+    const csv = `\uFEFF${rows.map((row) => row.map(escapeCell).join(';')).join('\r\n')}`
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `relatorio-financeiro-${summary.startDate}-${summary.endDate}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="reports-page">
       <section className="metrics-grid">
@@ -792,7 +828,7 @@ function ReportsSection({ summary }: { summary: DashboardSummary }) {
         </article>
       </section>
       <section className="card transactions-card">
-        <div className="card-heading"><div><p className="eyebrow">Detalhamento</p><h2>Movimentações recentes</h2></div></div>
+        <div className="card-heading"><div><p className="eyebrow">Detalhamento</p><h2>Movimentações recentes</h2></div><button className="primary-small-button" onClick={exportCsv}>Exportar CSV</button></div>
         {summary.recentTransactions.length === 0 ? <EmptyState text="Nenhuma movimentação no período." /> : <TransactionList transactions={summary.recentTransactions} />}
       </section>
     </div>
