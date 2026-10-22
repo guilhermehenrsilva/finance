@@ -4,6 +4,7 @@ import com.finance.api.domain.account.Account;
 import com.finance.api.domain.category.Category;
 import com.finance.api.domain.creditcard.CreditCard;
 import com.finance.api.domain.creditcard.Invoice;
+import com.finance.api.domain.tag.Tag;
 import com.finance.api.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -11,6 +12,8 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Table(name = "transactions")
 @Entity(name = "Transaction")
@@ -43,6 +46,14 @@ public class Transaction {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "invoice_id")
     private Invoice invoice;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "transaction_tags",
+            joinColumns = @JoinColumn(name = "transaction_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    private Set<Tag> tags = new HashSet<>();
 
     private String description;
 

@@ -3,6 +3,7 @@ package com.finance.api.controller;
 import com.finance.api.domain.category.CategoryService;
 import com.finance.api.domain.category.dto.CategoryRequestDTO;
 import com.finance.api.domain.category.dto.CategoryResponseDTO;
+import com.finance.api.domain.transaction.TransactionType;
 import com.finance.api.domain.user.User;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +30,37 @@ public class CategoryController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CategoryResponseDTO>> list(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(categoryService.listUserCategories(user));
+    public ResponseEntity<List<CategoryResponseDTO>> list(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) TransactionType type,
+            @RequestParam(required = false) Boolean activeOnly
+    ) {
+        return ResponseEntity.ok(categoryService.listUserCategories(user, type, activeOnly));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<CategoryResponseDTO> getById(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id
+    ) {
+        return ResponseEntity.ok(categoryService.getCategoryById(user, id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<CategoryResponseDTO> update(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id,
+            @RequestBody @Valid CategoryRequestDTO dto
+    ) {
+        return ResponseEntity.ok(categoryService.updateCategory(user, id, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id
+    ) {
+        categoryService.deleteCategory(user, id);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -10,7 +10,8 @@ public record CategoryResponseDTO(
         String icon,
         String color,
         String parentId,
-        String parentName
+        String parentName,
+        Boolean active
 ) {
     public CategoryResponseDTO(Category c) {
         this(
@@ -20,7 +21,8 @@ public record CategoryResponseDTO(
                 c.getIcon(),
                 c.getColor(),
                 c.getParentCategory() != null ? c.getParentCategory().getId() : null,
-                c.getParentCategory() != null ? c.getParentCategory().getName() : null
+                c.getParentCategory() != null ? c.getParentCategory().getName() : null,
+                c.getActive()
         );
     }
 }

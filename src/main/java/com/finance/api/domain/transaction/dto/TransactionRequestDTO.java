@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public record TransactionRequestDTO(
         @NotBlank(message = "A descrição é obrigatória")
@@ -25,5 +26,20 @@ public record TransactionRequestDTO(
         String accountId,
         String creditCardId,
         @Min(value = 1, message = "O número de parcelas deve ser maior que zero")
-        Integer totalInstallments 
-) {}
+        Integer totalInstallments,
+        List<String> tagIds
+) {
+    public TransactionRequestDTO(
+            String description,
+            BigDecimal amount,
+            TransactionType type,
+            TransactionStatus status,
+            LocalDate date,
+            String categoryId,
+            String accountId,
+            String creditCardId,
+            Integer totalInstallments
+    ) {
+        this(description, amount, type, status, date, categoryId, accountId, creditCardId, totalInstallments, null);
+    }
+}

@@ -29,7 +29,36 @@ public class CreditCardController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CreditCardResponseDTO>> list(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(creditCardService.listUserCreditCards(user));
+    public ResponseEntity<List<CreditCardResponseDTO>> list(
+            @AuthenticationPrincipal User user,
+            @RequestParam(required = false) Boolean activeOnly
+    ) {
+        return ResponseEntity.ok(creditCardService.listUserCreditCards(user, activeOnly));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<CreditCardResponseDTO> getById(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id
+    ) {
+        return ResponseEntity.ok(creditCardService.getCreditCardById(user, id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<CreditCardResponseDTO> update(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id,
+            @RequestBody @Valid CreditCardRequestDTO dto
+    ) {
+        return ResponseEntity.ok(creditCardService.updateCreditCard(user, id, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id
+    ) {
+        creditCardService.deleteCreditCard(user, id);
+        return ResponseEntity.noContent().build();
     }
 }

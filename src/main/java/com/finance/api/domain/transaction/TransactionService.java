@@ -42,6 +42,9 @@ public class TransactionService {
     @Autowired
     private InvoiceRepository invoiceRepository;
 
+    @Autowired
+    private com.finance.api.domain.tag.TagService tagService;
+
     @Transactional
     public TransactionResponseDTO createTransaction(User user, TransactionRequestDTO dto) {
         validateTransactionType(dto);
@@ -64,6 +67,10 @@ public class TransactionService {
                 RoundingMode.DOWN
         );
         String installmentGroupId = installments > 1 ? UUID.randomUUID().toString() : null;
+
+        java.util.Set<com.finance.api.domain.tag.Tag> tags = (dto.tagIds() != null && !dto.tagIds().isEmpty())
+                ? new java.util.HashSet<>(tagService.findTagsByUserAndIds(user, dto.tagIds()))
+                : new java.util.HashSet<>();
 
         Transaction lastSavedTransaction = null;
 
@@ -129,6 +136,7 @@ public class TransactionService {
                 transaction.setInstallmentGroupId(installmentGroupId);
                 transaction.setInstallmentNumber(i);
                 transaction.setTotalInstallments(installments);
+                transaction.setTags(new java.util.HashSet<>(tags));
 
                 lastSavedTransaction = transactionRepository.save(transaction);
             }
@@ -150,6 +158,7 @@ public class TransactionService {
             transaction.setInstallmentGroupId(installmentGroupId);
             transaction.setInstallmentNumber(1);
             transaction.setTotalInstallments(1);
+            transaction.setTags(tags);
 
             if (transaction.getStatus() == TransactionStatus.PAID) {
                 if (transaction.getType() == TransactionType.INCOME) {
@@ -237,6 +246,9 @@ public class TransactionService {
         transaction.setDate(dto.date());
         transaction.setCategory(category);
         transaction.setAccount(newAccount);
+        if (dto.tagIds() != null) {
+            transaction.setTags(new java.util.HashSet<>(tagService.findTagsByUserAndIds(user, dto.tagIds())));
+        }
 
         applyAccountBalance(transaction);
         return new TransactionResponseDTO(transactionRepository.save(transaction));
