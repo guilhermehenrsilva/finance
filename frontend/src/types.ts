@@ -2,6 +2,20 @@ export type TransactionType = 'INCOME' | 'EXPENSE'
 export type TransactionStatus = 'PENDING' | 'PAID'
 export type RecurringFrequency = 'WEEKLY' | 'MONTHLY' | 'YEARLY'
 
+export interface Tag {
+  id: string
+  name: string
+  color: string | null
+}
+
+export interface UserProfile {
+  id: string
+  name: string
+  email: string
+  mainCurrency: string
+  createdAt: string
+}
+
 export interface Account {
   id: string
   name: string
@@ -15,12 +29,14 @@ export interface Account {
 export interface CreditCard {
   id: string
   name: string
+  accountId?: string | null
   accountName: string | null
   creditLimit: number
   availableLimit: number
   closingDay: number
   dueDay: number
   color: string | null
+  active?: boolean
 }
 
 export type InvoiceStatus = 'OPEN' | 'CLOSED' | 'PAID'
@@ -69,6 +85,7 @@ export interface Category {
   color: string | null
   parentId: string | null
   parentName: string | null
+  active?: boolean
 }
 
 export interface CategorySummary {
@@ -82,12 +99,14 @@ export interface Transaction {
   accountName: string | null
   categoryId: string | null
   creditCardName: string | null
+  invoiceId?: string | null
   description: string
   amount: number
   type: TransactionType
   status: TransactionStatus
   date: string
   categoryName: string | null
+  tags?: Tag[]
 }
 
 export interface DashboardSummary {
