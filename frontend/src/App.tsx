@@ -828,7 +828,7 @@ function ReportsSection({ summary }: { summary: DashboardSummary }) {
         </article>
       </section>
       <section className="card transactions-card">
-        <div className="card-heading"><div><p className="eyebrow">Detalhamento</p><h2>Movimentações recentes</h2></div><button className="primary-small-button" onClick={exportCsv}>Exportar CSV</button></div>
+        <div className="card-heading"><div><p className="eyebrow">Detalhamento</p><h2>Movimentações recentes</h2></div><div className="report-actions"><button className="primary-small-button" onClick={exportCsv}>Exportar CSV</button><button className="secondary-small-button" onClick={() => window.print()}>Exportar PDF</button></div></div>
         {summary.recentTransactions.length === 0 ? <EmptyState text="Nenhuma movimentação no período." /> : <TransactionList transactions={summary.recentTransactions} />}
       </section>
     </div>
