@@ -1,13 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { contributeToGoal, createAccount, createBudget, createCategory, createCreditCard, createGoal, createRecurringTransaction, createTransaction, createTransfer, deleteBudget, deleteGoal, deleteRecurringTransaction, deleteTransaction, deleteTransfer, getAccounts, getBudgets, getCategories, getCreditCards, getDashboard, getGoals, getInvoices, getRecurringTransactions, getTransactions, getTransfers, login, payInvoice, register, toggleRecurringTransaction, updateTransaction } from './services/api'
-import type { Account, Budget, Category, CreditCard, DashboardSummary, FinancialGoal, Invoice, RecurringFrequency, RecurringTransaction, Transaction, TransactionType, Transfer } from './types'
+import { changePassword, contributeToGoal, createAccount, createBudget, createCategory, createCreditCard, createGoal, createRecurringTransaction, createTag, createTransaction, createTransfer, deleteBudget, deleteGoal, deleteRecurringTransaction, deleteTag, deleteTransaction, deleteTransfer, getAccounts, getBudgets, getCategories, getCreditCards, getDashboard, getGoals, getInvoices, getProfile, getRecurringTransactions, getTags, getTransactions, getTransfers, login, payInvoice, register, toggleRecurringTransaction, updateProfile, updateTransaction } from './services/api'
+import type { Account, Budget, Category, CreditCard, DashboardSummary, FinancialGoal, FinancialNotification, Invoice, RecurringFrequency, RecurringTransaction, Tag, Transaction, TransactionType, Transfer, UserProfile } from './types'
 
 const TOKEN_KEY = 'finance.auth.token'
-type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring' | 'budgets' | 'goals' | 'reports'
+type PageKey = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'cards' | 'invoices' | 'transfers' | 'recurring' | 'budgets' | 'goals' | 'reports' | 'tags' | 'profile' | 'notifications'
 
 function pageFromHash(): PageKey {
   const value = window.location.hash.replace('#', '') as PageKey
-  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring', 'budgets', 'goals', 'reports'].includes(value)
+  return ['dashboard', 'transactions', 'accounts', 'categories', 'cards', 'invoices', 'transfers', 'recurring', 'budgets', 'goals', 'reports', 'tags', 'profile', 'notifications'].includes(value)
     ? value
     : 'dashboard'
 }
@@ -34,6 +34,30 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('pt-BR').format(new Date(`${value}T00:00:00`))
 }
 
+function buildNotifications(invoices: Invoice[], budgets: Budget[], goals: FinancialGoal[], transactions: Transaction[]): FinancialNotification[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const notifications: FinancialNotification[] = []
+  invoices.filter((invoice) => invoice.status !== 'PAID').forEach((invoice) => {
+    const dueDate = new Date(`${invoice.dueDate}T00:00:00`)
+    const days = Math.ceil((dueDate.getTime() - today.getTime()) / 86400000)
+    if (days < 0) notifications.push({ id: `invoice-overdue-${invoice.id}`, title: 'Fatura vencida', description: `${invoice.creditCardName} está vencida desde ${formatDate(invoice.dueDate)}.`, tone: 'danger', page: 'invoices' })
+    else if (days <= 7) notifications.push({ id: `invoice-due-${invoice.id}`, title: 'Fatura próxima do vencimento', description: `${invoice.creditCardName} vence em ${days === 0 ? 'hoje' : `${days} dia(s)`}.`, tone: 'warning', page: 'invoices' })
+  })
+  budgets.filter((budget) => budget.percentage >= 80).forEach((budget) => {
+    notifications.push({ id: `budget-${budget.id}`, title: budget.percentage >= 100 ? 'Orçamento ultrapassado' : 'Orçamento próximo do limite', description: `${budget.categoryName} consumiu ${Math.round(budget.percentage)}% do orçamento.`, tone: budget.percentage >= 100 ? 'danger' : 'warning', page: 'budgets' })
+  })
+  goals.filter((goal) => !goal.completed && goal.deadline).forEach((goal) => {
+    const deadline = new Date(`${goal.deadline}T00:00:00`)
+    const days = Math.ceil((deadline.getTime() - today.getTime()) / 86400000)
+    if (days >= 0 && days <= 30) notifications.push({ id: `goal-${goal.id}`, title: 'Meta próxima do prazo', description: `${goal.name} vence em ${days === 0 ? 'hoje' : `${days} dia(s)`}.`, tone: 'info', page: 'goals' })
+  })
+  if (transactions.filter((transaction) => transaction.status === 'PENDING' && transaction.type === 'EXPENSE').length > 0) {
+    notifications.push({ id: 'pending-expenses', title: 'Despesas pendentes', description: 'Existem despesas pendentes que precisam de atenção.', tone: 'info', page: 'transactions' })
+  }
+  return notifications
+}
+
 function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY))
   const [page, setPage] = useState<PageKey>(pageFromHash)
@@ -53,6 +77,9 @@ function App() {
   const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([])
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [goals, setGoals] = useState<FinancialGoal[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const notifications = buildNotifications(invoices, budgets, goals, transactions)
 
   useEffect(() => {
     const onHashChange = () => setPage(pageFromHash())
@@ -98,6 +125,12 @@ function App() {
     getGoals(token)
       .then(setGoals)
       .catch(() => setError('Não foi possível carregar suas metas.'))
+    getTags(token)
+      .then(setTags)
+      .catch(() => setError('Não foi possível carregar suas tags.'))
+    getProfile(token)
+      .then(setProfile)
+      .catch(() => setError('Não foi possível carregar seu perfil.'))
   }, [token, startDate, endDate, refresh])
 
   function handleLogin(newToken: string) {
@@ -131,6 +164,9 @@ function App() {
           <a className={`nav-item ${page === 'budgets' ? 'active' : ''}`} href="#budgets">Orçamentos</a>
           <a className={`nav-item ${page === 'goals' ? 'active' : ''}`} href="#goals">Metas</a>
           <a className={`nav-item ${page === 'reports' ? 'active' : ''}`} href="#reports">Relatórios</a>
+          <a className={`nav-item ${page === 'tags' ? 'active' : ''}`} href="#tags">Tags</a>
+          <a className={`nav-item ${page === 'profile' ? 'active' : ''}`} href="#profile">Perfil</a>
+          <a className={`nav-item ${page === 'notifications' ? 'active' : ''}`} href="#notifications">Alertas {notifications.length > 0 && <span className="notification-count">{notifications.length}</span>}</a>
         </nav>
         <button className="logout-button" onClick={() => {
           localStorage.removeItem(TOKEN_KEY)
@@ -141,7 +177,7 @@ function App() {
       <main className="content">
         <header className="page-header">
           <div>
-            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : page === 'recurring' ? 'Recorrências' : page === 'budgets' ? 'Orçamentos' : page === 'goals' ? 'Metas' : 'Relatórios'}</p>
+            <p className="eyebrow">{page === 'dashboard' ? 'Visão geral' : page === 'transactions' ? 'Movimentações' : page === 'accounts' ? 'Contas' : page === 'categories' ? 'Categorias' : page === 'cards' ? 'Cartões' : page === 'invoices' ? 'Faturas' : page === 'transfers' ? 'Transferências' : page === 'recurring' ? 'Recorrências' : page === 'budgets' ? 'Orçamentos' : page === 'goals' ? 'Metas' : page === 'reports' ? 'Relatórios' : page === 'tags' ? 'Tags' : page === 'profile' ? 'Perfil' : 'Alertas'}</p>
             <h1>{page === 'dashboard' ? 'Seu dinheiro, sob controle.' : 'Organize sua vida financeira.'}</h1>
           </div>
           <div className="period-selector">
@@ -152,7 +188,7 @@ function App() {
 
         {error && <div className="alert error">{error}</div>}
         {loading && <div className="loading">Atualizando seus dados...</div>}
-        {summary && <Dashboard page={page} summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} budgets={budgets} goals={goals} token={token} onNavigate={navigate} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} onBudgetsChanged={() => setRefresh((current) => current + 1)} onGoalsChanged={() => setRefresh((current) => current + 1)} />}
+        {summary && <Dashboard page={page} summary={summary} accounts={accounts} categories={categories} creditCards={creditCards} invoices={invoices} transactions={transactions} transfers={transfers} recurringTransactions={recurringTransactions} budgets={budgets} goals={goals} tags={tags} profile={profile} notifications={notifications} token={token} onNavigate={navigate} onProfileChanged={setProfile} onAccountCreated={(account) => setAccounts((current) => [...current, account])} onCategoryCreated={(category) => setCategories((current) => [...current, category])} onCreditCardCreated={(card) => setCreditCards((current) => [...current, card])} onTransactionCreated={() => setRefresh((current) => current + 1)} onTransactionsChanged={() => setRefresh((current) => current + 1)} onTransfersChanged={() => setRefresh((current) => current + 1)} onInvoicesChanged={() => setRefresh((current) => current + 1)} onRecurringChanged={() => setRefresh((current) => current + 1)} onBudgetsChanged={() => setRefresh((current) => current + 1)} onGoalsChanged={() => setRefresh((current) => current + 1)} onTagsChanged={() => setRefresh((current) => current + 1)} />}
       </main>
     </div>
   )
@@ -220,7 +256,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function Dashboard({ page, summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, budgets, goals, token, onNavigate, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged, onBudgetsChanged, onGoalsChanged }: {
+function Dashboard({ page, summary, accounts, categories, creditCards, invoices, transactions, transfers, recurringTransactions, budgets, goals, tags, profile, notifications, token, onNavigate, onProfileChanged, onAccountCreated, onCategoryCreated, onCreditCardCreated, onTransactionCreated, onTransactionsChanged, onTransfersChanged, onInvoicesChanged, onRecurringChanged, onBudgetsChanged, onGoalsChanged, onTagsChanged }: {
   page: PageKey
   summary: DashboardSummary
   accounts: Account[]
@@ -232,8 +268,12 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
   recurringTransactions: RecurringTransaction[]
   budgets: Budget[]
   goals: FinancialGoal[]
+  tags: Tag[]
+  profile: UserProfile | null
+  notifications: FinancialNotification[]
   token: string
   onNavigate: (page: PageKey) => void
+  onProfileChanged: (profile: UserProfile) => void
   onAccountCreated: (account: Account) => void
   onCategoryCreated: (category: Category) => void
   onCreditCardCreated: (card: CreditCard) => void
@@ -244,6 +284,7 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
   onRecurringChanged: () => void
   onBudgetsChanged: () => void
   onGoalsChanged: () => void
+  onTagsChanged: () => void
 }) {
   const refreshTransactions = () => onTransactionsChanged()
 
@@ -281,7 +322,10 @@ function Dashboard({ page, summary, accounts, categories, creditCards, invoices,
       {page === 'budgets' && <BudgetsSection budgets={budgets} categories={categories} token={token} onChanged={onBudgetsChanged} />}
       {page === 'goals' && <GoalsSection goals={goals} token={token} onChanged={onGoalsChanged} />}
       {page === 'reports' && <ReportsSection summary={summary} />}
-      {page === 'transactions' && <TransactionsSection accounts={accounts} categories={categories} creditCards={creditCards} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={refreshTransactions} />}
+      {page === 'tags' && <TagsSection tags={tags} token={token} onChanged={onTagsChanged} />}
+      {page === 'profile' && profile && <ProfileSection profile={profile} token={token} onChanged={onProfileChanged} />}
+      {page === 'notifications' && <NotificationsSection notifications={notifications} onNavigate={onNavigate} />}
+      {page === 'transactions' && <TransactionsSection accounts={accounts} categories={categories} creditCards={creditCards} tags={tags} transactions={transactions} token={token} onCreated={onTransactionCreated} onChanged={refreshTransactions} />}
     </div>
   )
 }
@@ -368,10 +412,11 @@ function TransfersSection({ accounts, transfers, token, onChanged }: {
   )
 }
 
-function TransactionsSection({ accounts, categories, creditCards, transactions, token, onCreated, onChanged }: {
+function TransactionsSection({ accounts, categories, creditCards, tags, transactions, token, onCreated, onChanged }: {
   accounts: Account[]
   categories: Category[]
   creditCards: CreditCard[]
+  tags: Tag[]
   transactions: Transaction[]
   token: string
   onCreated: () => void
@@ -386,6 +431,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
   const [creditCardId, setCreditCardId] = useState('')
+  const [tagIds, setTagIds] = useState<string[]>([])
   const [installments, setInstallments] = useState('1')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -396,6 +442,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
   const [filterAccountId, setFilterAccountId] = useState('ALL')
   const [filterCreditCardId, setFilterCreditCardId] = useState('ALL')
   const [filterDescription, setFilterDescription] = useState('')
+  const [filterTagId, setFilterTagId] = useState('ALL')
   const availableCategories = categories.filter((category) => category.type === type)
   const filteredTransactions = transactions.filter((transaction) => {
     const typeMatches = filter === 'ALL' || transaction.type === filter
@@ -405,7 +452,8 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
     const selectedCard = creditCards.find((card) => card.id === filterCreditCardId)
     const cardMatches = filterCreditCardId === 'ALL' || transaction.creditCardName === selectedCard?.name
     const descriptionMatches = !filterDescription.trim() || transaction.description.toLowerCase().includes(filterDescription.trim().toLowerCase())
-    return typeMatches && statusMatches && categoryMatches && accountMatches && cardMatches && descriptionMatches
+    const tagMatches = filterTagId === 'ALL' || transaction.tags?.some((tag) => tag.id === filterTagId)
+    return typeMatches && statusMatches && categoryMatches && accountMatches && cardMatches && descriptionMatches && tagMatches
   })
   function resetForm() {
     setDescription('')
@@ -416,6 +464,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
     setCategoryId('')
     setAccountId('')
     setCreditCardId('')
+    setTagIds([])
     setInstallments('1')
     setEditingId(null)
   }
@@ -439,6 +488,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
         categoryId,
         accountId,
         ...(creditCardId ? { creditCardId } : {}),
+        tagIds,
         totalInstallments: Number(installments),
       }
       if (editingId) {
@@ -486,6 +536,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
     setCategoryId(transaction.categoryId)
     setAccountId(transaction.accountId)
     setCreditCardId('')
+    setTagIds(transaction.tags?.map((tag) => tag.id) ?? [])
     setInstallments('1')
     setError('')
     setOpen(true)
@@ -507,6 +558,7 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
         <label>Conta<select value={accountId} onChange={(event) => { setAccountId(event.target.value); setCreditCardId('') }}><option value="">Nenhuma</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
         {type === 'EXPENSE' && <label>Cartão<select value={creditCardId} onChange={(event) => { setCreditCardId(event.target.value); setAccountId('') }}><option value="">Nenhum</option>{creditCards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select></label>}
         <label>Parcelas<input disabled={Boolean(editingId)} min="1" max="60" type="number" value={installments} onChange={(event) => setInstallments(event.target.value)} /></label>
+        <label>Tags<select multiple value={tagIds} onChange={(event) => setTagIds(Array.from(event.target.selectedOptions, (option) => option.value))}>{tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}</select></label>
         {error && <div className="alert error">{error}</div>}
         <button className="primary-button" disabled={saving || accounts.length === 0 || availableCategories.length === 0}>{saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Salvar movimentação'}</button>
       </form>}
@@ -533,13 +585,17 @@ function TransactionsSection({ accounts, categories, creditCards, transactions, 
             <option value="ALL">Todos os cartões</option>
             {creditCards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}
           </select>
+          <select value={filterTagId} onChange={(event) => setFilterTagId(event.target.value)}>
+            <option value="ALL">Todas as tags</option>
+            {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+          </select>
         </div>
       </div>
       <div className="transaction-history">
         {filteredTransactions.slice(0, 20).map((transaction) => (
           <div className="transaction-row" key={transaction.id}>
             <div className={`transaction-icon ${transaction.type === 'INCOME' ? 'income' : 'expense'}`}>{transaction.type === 'INCOME' ? '+' : '−'}</div>
-            <div className="transaction-description"><strong>{transaction.description}</strong><span>{transaction.categoryName ?? 'Sem categoria'} · {formatDate(transaction.date)}</span></div>
+            <div className="transaction-description"><strong>{transaction.description}</strong><span>{transaction.categoryName ?? 'Sem categoria'} · {formatDate(transaction.date)}{transaction.tags?.length ? ` · ${transaction.tags.map((tag) => `#${tag.name}`).join(' ')}` : ''}</span></div>
             <strong className={transaction.type === 'INCOME' ? 'positive' : 'negative'}>{formatCurrency(transaction.amount)}</strong>
             <button className="edit-button" title={transaction.creditCardName ? 'Compras no cartão não podem ser editadas' : 'Editar movimentação'} onClick={() => edit(transaction)}>Editar</button>
             <button className="delete-button" title="Excluir movimentação" onClick={() => remove(transaction)}>Excluir</button>
@@ -833,6 +889,116 @@ function ReportsSection({ summary }: { summary: DashboardSummary }) {
       </section>
     </div>
   )
+}
+
+function ProfileSection({ profile, token, onChanged }: { profile: UserProfile; token: string; onChanged: (profile: UserProfile) => void }) {
+  const [name, setName] = useState(profile.name)
+  const [mainCurrency, setMainCurrency] = useState(profile.mainCurrency)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault()
+    setSaving(true)
+    setMessage('')
+    setError('')
+    try {
+      onChanged(await updateProfile(token, { name, mainCurrency }))
+      setMessage('Perfil atualizado com sucesso.')
+    } catch (profileError) {
+      setError(profileError instanceof Error ? profileError.message : 'Não foi possível atualizar o perfil.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function savePassword(event: FormEvent) {
+    event.preventDefault()
+    setSaving(true)
+    setMessage('')
+    setError('')
+    try {
+      await changePassword(token, { currentPassword, newPassword })
+      setCurrentPassword('')
+      setNewPassword('')
+      setMessage('Senha alterada com sucesso.')
+    } catch (passwordError) {
+      setError(passwordError instanceof Error ? passwordError.message : 'Não foi possível alterar a senha.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <div className="profile-grid">
+    <section className="card profile-card">
+      <div className="card-heading"><div><p className="eyebrow">Dados pessoais</p><h2>Meu perfil</h2></div></div>
+      <form className="profile-form" onSubmit={saveProfile}>
+        <label>Nome<input required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <label>E-mail<input value={profile.email} disabled /></label>
+        <label>Moeda principal<select value={mainCurrency} onChange={(event) => setMainCurrency(event.target.value)}><option value="BRL">BRL - Real brasileiro</option><option value="USD">USD - Dólar americano</option><option value="EUR">EUR - Euro</option></select></label>
+        <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar alterações'}</button>
+      </form>
+    </section>
+    <section className="card profile-card">
+      <div className="card-heading"><div><p className="eyebrow">Segurança</p><h2>Alterar senha</h2></div></div>
+      <form className="profile-form" onSubmit={savePassword}>
+        <label>Senha atual<input required type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
+        <label>Nova senha<input required minLength={6} type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+        <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Alterar senha'}</button>
+      </form>
+    </section>
+    {message && <div className="alert success">{message}</div>}
+    {error && <div className="alert error">{error}</div>}
+  </div>
+}
+
+function NotificationsSection({ notifications, onNavigate }: { notifications: FinancialNotification[]; onNavigate: (page: PageKey) => void }) {
+  return <section className="card notifications-card">
+    <div className="card-heading"><div><p className="eyebrow">Acompanhamento</p><h2>Alertas financeiros</h2></div><span className="notification-summary">{notifications.length} ativo(s)</span></div>
+    {notifications.length === 0 ? <EmptyState text="Nenhum alerta financeiro no momento." /> : <div className="notification-list">{notifications.map((notification) => <button className={`notification-item ${notification.tone}`} key={notification.id} onClick={() => onNavigate(notification.page)}><span className="notification-icon">{notification.tone === 'danger' ? '!' : notification.tone === 'warning' ? '⚠' : 'i'}</span><span className="notification-content"><strong>{notification.title}</strong><span>{notification.description}</span></span><span className="notification-arrow">→</span></button>)}</div>}
+  </section>
+}
+
+function TagsSection({ tags, token, onChanged }: { tags: Tag[]; token: string; onChanged: () => void }) {
+  const [name, setName] = useState('')
+  const [color, setColor] = useState('#4fd1c5')
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    try {
+      await createTag(token, { name, color })
+      setName('')
+      onChanged()
+    } catch (tagError) {
+      setError(tagError instanceof Error ? tagError.message : 'Não foi possível criar a tag.')
+    }
+  }
+
+  async function remove(tag: Tag) {
+    if (!window.confirm(`Excluir a tag "${tag.name}"?`)) return
+    try {
+      await deleteTag(token, tag.id)
+      onChanged()
+    } catch (tagError) {
+      setError(tagError instanceof Error ? tagError.message : 'Não foi possível excluir a tag.')
+    }
+  }
+
+  return <section className="card tags-card">
+    <div className="card-heading"><div><p className="eyebrow">Organização</p><h2>Tags</h2></div></div>
+    <form className="card-form tag-form" onSubmit={submit}>
+      <label>Nome<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Trabalho" /></label>
+      <label>Cor<input type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+      <button className="primary-small-button">Criar tag</button>
+    </form>
+    {error && <div className="alert error">{error}</div>}
+    {tags.length === 0 ? <EmptyState text="Nenhuma tag cadastrada." /> : <div className="tag-list">{tags.map((tag) => <div className="tag-item" key={tag.id}><span className="tag-pill" style={{ background: tag.color ?? '#4fd1c5' }}>#{tag.name}</span><button className="delete-button" onClick={() => remove(tag)}>Excluir</button></div>)}</div>}
+  </section>
 }
 
 function GoalsSection({ goals, token, onChanged }: {

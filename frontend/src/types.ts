@@ -16,6 +16,14 @@ export interface UserProfile {
   createdAt: string
 }
 
+export interface FinancialNotification {
+  id: string
+  title: string
+  description: string
+  tone: 'warning' | 'danger' | 'info'
+  page: 'invoices' | 'budgets' | 'goals' | 'transactions'
+}
+
 export interface Account {
   id: string
   name: string
